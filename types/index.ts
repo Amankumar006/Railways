@@ -1,5 +1,5 @@
 // User roles
-export type UserRole = 'inspector' | 'supervisor';
+export type UserRole = 'inspector' | 'supervisor' | 'manager';
 
 // User profile
 export interface User {

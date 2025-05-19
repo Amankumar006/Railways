@@ -1,4 +1,4 @@
-import { Text, TextProps, StyleSheet, useColorScheme } from 'react-native';
+import { Text, TextProps, StyleSheet, useColorScheme, StyleProp, TextStyle } from 'react-native';
 import { colorScheme } from '@/constants/Colors';
 
 export type FontWeight = 'regular' | 'medium' | 'bold';
@@ -8,6 +8,7 @@ interface StyledTextProps extends TextProps {
   weight?: FontWeight;
   size?: FontSize;
   color?: string;
+  style?: StyleProp<TextStyle>;
 }
 
 export function StyledText({ 

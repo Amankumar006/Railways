@@ -228,7 +228,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState(prev => ({ ...prev, loading: true }));
     
     try {
-      await supabaseAuth.signOut();
+      // Use the auth.signOut() function from our lib/supabase.ts
+      await auth.signOut();
+      
+      // Clear any stored session data
+      if (Platform.OS !== 'web') {
+        await SecureStore.deleteItemAsync('supabase-auth-token');
+      }
       
       setState({
         isAuthenticated: false,

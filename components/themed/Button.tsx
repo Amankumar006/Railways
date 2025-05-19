@@ -118,6 +118,18 @@ export function Button({
       );
     }
 
+    // Helper function to handle conditional styles safely
+    const getIconSpacing = () => {
+      if (icon) {
+        if (iconPosition === 'left') {
+          return { marginLeft: 8 };
+        } else if (iconPosition === 'right') {
+          return { marginRight: 8 };
+        }
+      }
+      return {};
+    };
+
     return (
       <>
         {icon && iconPosition === 'left' && icon}
@@ -126,8 +138,7 @@ export function Button({
             styles.text,
             styles[`text-${size}`],
             { color: getTextColor() },
-            iconPosition === 'left' && icon && { marginLeft: 8 },
-            iconPosition === 'right' && icon && { marginRight: 8 },
+            getIconSpacing(),
             textStyle,
           ]}
           weight={variant === 'ghost' ? 'medium' : 'bold'}

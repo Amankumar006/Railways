@@ -86,10 +86,11 @@ export default function SignupScreen() {
 
     if (isNameValid && isEmailValid && isPasswordValid && isConfirmPasswordValid) {
       try {
+        // Default role is 'inspector', but can be changed to 'manager' or 'supervisor' later
         await signup(email, password, {
           name,
           email,
-          role: 'inspector' as UserRole, // Default role
+          role: 'inspector' as UserRole,
           department,
           phone,
         });

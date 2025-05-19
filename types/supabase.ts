@@ -23,7 +23,7 @@ export interface Database {
           id: string
           name: string
           email: string
-          role: 'inspector' | 'supervisor'
+          role: 'inspector' | 'supervisor' | 'manager'
           department: string | null
           phone: string | null
           avatar_url: string | null
@@ -34,7 +34,7 @@ export interface Database {
           id: string
           name: string
           email: string
-          role?: 'inspector' | 'supervisor'
+          role?: 'inspector' | 'supervisor' | 'manager'
           department?: string | null
           phone?: string | null
           avatar_url?: string | null
@@ -45,7 +45,7 @@ export interface Database {
           id?: string
           name?: string
           email?: string
-          role?: 'inspector' | 'supervisor'
+          role?: 'inspector' | 'supervisor' | 'manager'
           department?: string | null
           phone?: string | null
           avatar_url?: string | null
@@ -175,7 +175,7 @@ export interface Database {
       [_ in never]: never
     }
     Enums: {
-      user_role: 'inspector' | 'supervisor'
+      user_role: 'inspector' | 'supervisor' | 'manager'
       inspection_status: 'pending' | 'in-progress' | 'completed' | 'canceled'
       inspection_type: 'gear' | 'interior' | 'exterior' | 'comprehensive'
       priority_level: 'low' | 'medium' | 'high'

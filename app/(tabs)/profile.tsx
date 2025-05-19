@@ -8,40 +8,79 @@ import {
   Alert,
   useColorScheme,
   ActivityIndicator,
-  Text
+  Text,
+  Modal
 } from 'react-native';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
 import { Card } from '@/components/themed/Card';
 import { Button } from '@/components/themed/Button';
+import { Input } from '@/components/themed/Input';
 import { useAuth } from '@/context/AuthContext';
-import { supabase, db } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { colorScheme, colors } from '@/constants/Colors';
-import { User, Mail, Phone, Building, Shield, LogOut, Moon, Sun, CircleHelp as HelpCircle, Bell, Settings, FileText, Camera, Upload } from 'lucide-react-native';
+import { User, Mail, Phone, Building, Shield, LogOut, Moon, Sun, CircleHelp as HelpCircle, Bell, Settings, FileText, Camera, Upload, Edit, X, RefreshCw, WifiOff } from 'lucide-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { Platform } from 'react-native';
+import { useRouter } from 'expo-router';
+import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Define custom colors that are missing from the color scheme
+const extendedColors = {
+  ...colors,
+  info: {
+    500: '#0ea5e9', // Sky blue color for info
+  },
+  warning: {
+    500: '#f59e0b', // Amber color for warnings
+  },
+  error: {
+    400: '#f87171', // Lighter red
+    500: '#ef4444', // Red
+  },
+  success: {
+    500: '#22c55e', // Green
+  }
+};
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const colorMode = useColorScheme() ?? 'light';
   const themeColors = colorScheme[colorMode];
+  const router = useRouter();
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [userStats, setUserStats] = useState({
     completedInspections: 0,
-    completionRate: 0
+    completionRate: 0,
+    pendingInspections: 0,
+    inProgressInspections: 0,
+    canceledInspections: 0,
+    totalInspections: 0,
+    lastCompletedDate: null as string | null,
+    onTimeCompletion: 0
   });
   const [userProfile, setUserProfile] = useState<{
     avatar_url?: string;
     phone?: string;
     department?: string;
   } | null>(null);
-  
-  // Fetch user statistics from Supabase
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableProfile, setEditableProfile] = useState({
+    name: user?.name || '',
+    phone: '',
+    department: '',
+  });
+  const [isOffline, setIsOffline] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState(false);
+  const [syncingData, setSyncingData] = useState(false);
+
+  // Fetch user statistics from Supabase with enhanced metrics
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user?.id) {
@@ -70,27 +109,59 @@ export default function ProfileScreen() {
         console.log("Profile data retrieved:", profileData);
         setUserProfile(profileData);
         
-        // Safely fetch completed inspections count
+        // Safely fetch expanded inspection statistics
         let completedCount = 0;
         let totalCount = 0;
+        let pendingCount = 0;
+        let inProgressCount = 0;
+        let canceledCount = 0;
+        let lastCompletedDate: string | null = null;
+        let onTimeCount = 0;
         
         try {
-          // Get completed inspections count
-          const completedResult = await supabase
+          // Get inspections by status
+          const { data: inspectionsData, error: inspectionsError } = await supabase
             .from('schedules')
-            .select('id', { count: 'exact' })
-            .eq('status', 'completed')
+            .select('id, status, scheduled_date, completed_date')
             .eq('assigned_to_id', user.id);
             
-          completedCount = completedResult.count || 0;
+          if (inspectionsError) throw inspectionsError;
           
-          // Get total inspections assigned to user
-          const totalResult = await supabase
-            .from('schedules')
-            .select('id', { count: 'exact' })
-            .eq('assigned_to_id', user.id);
+          // Count by status
+          if (inspectionsData) {
+            totalCount = inspectionsData.length;
             
-          totalCount = totalResult.count || 0;
+            // Process each inspection
+            const now = new Date();
+            inspectionsData.forEach(inspection => {
+              switch(inspection.status) {
+                case 'completed':
+                  completedCount++;
+                  
+                  // Track the latest completed date
+                  const completedDate = inspection.completed_date ? new Date(inspection.completed_date) : null;
+                  if (completedDate && (!lastCompletedDate || completedDate > (lastCompletedDate ? new Date(lastCompletedDate) : new Date(0)))) {
+                    lastCompletedDate = inspection.completed_date;
+                  }
+                  
+                  // Check if completed on time (before or on scheduled date)
+                  const scheduledDate = new Date(inspection.scheduled_date);
+                  if (completedDate && completedDate <= scheduledDate) {
+                    onTimeCount++;
+                  }
+                  break;
+                case 'pending':
+                  pendingCount++;
+                  break;
+                case 'in-progress':
+                  inProgressCount++;
+                  break;
+                case 'canceled':
+                  canceledCount++;
+                  break;
+              }
+            });
+          }
         } catch (statsError) {
           console.error("Error fetching stats:", statsError);
           // Continue execution - we'll just show 0 for stats
@@ -100,10 +171,21 @@ export default function ProfileScreen() {
         const completionRate = totalCount > 0 
           ? Math.round((completedCount / totalCount) * 100) 
           : 0;
+          
+        // Calculate on-time completion rate
+        const onTimeRate = completedCount > 0
+          ? Math.round((onTimeCount / completedCount) * 100)
+          : 0;
         
         setUserStats({
           completedInspections: completedCount || 0,
-          completionRate
+          completionRate,
+          pendingInspections: pendingCount || 0,
+          inProgressInspections: inProgressCount || 0,
+          canceledInspections: canceledCount || 0,
+          totalInspections: totalCount || 0,
+          lastCompletedDate,
+          onTimeCompletion: onTimeRate
         });
         
       } catch (error: any) {
@@ -117,6 +199,70 @@ export default function ProfileScreen() {
     fetchUserData();
   }, [user?.id]);
   
+  // Update useEffect to initialize the editable profile when user data loads
+  useEffect(() => {
+    if (user) {
+      setEditableProfile({
+        name: user.name || '',
+        phone: userProfile?.phone || user?.phone || '',
+        department: userProfile?.department || user?.department || '',
+      });
+    }
+  }, [user, userProfile]);
+  
+  // Handle profile updates with offline support
+  const handleUpdateProfile = async () => {
+    if (!user?.id) return;
+    
+    setLoading(true);
+    try {
+      const updates = {
+        name: editableProfile.name,
+        phone: editableProfile.phone,
+        department: editableProfile.department,
+      };
+      
+      if (isOffline) {
+        // Store changes locally
+        await AsyncStorage.setItem('pending_profile_changes', JSON.stringify(updates));
+        setPendingChanges(true);
+        
+        // Update local state immediately
+        setUserProfile(prev => ({
+          ...prev,
+          phone: updates.phone,
+          department: updates.department,
+        }));
+        
+        Alert.alert('Saved Offline', 'Your profile changes will be synced when you\'re back online.');
+      } else {
+        // Online mode - update directly
+        const { error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', user.id);
+        
+        if (error) throw error;
+        
+        // Update local state
+        setUserProfile(prev => ({
+          ...prev,
+          phone: updates.phone,
+          department: updates.department,
+        }));
+        
+        Alert.alert('Success', 'Profile updated successfully');
+      }
+      
+      setIsEditing(false);
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', error.message || 'Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   const handleLogout = () => {
     Alert.alert(
       'Logout',
@@ -128,7 +274,15 @@ export default function ProfileScreen() {
         },
         {
           text: 'Logout',
-          onPress: () => logout(),
+          onPress: async () => {
+            try {
+              await logout();
+              console.log('Logout successful');
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Logout Failed', 'Please try again');
+            }
+          },
           style: 'destructive',
         },
       ]
@@ -184,7 +338,14 @@ export default function ProfileScreen() {
       });
       
       if (!result.canceled && result.assets && result.assets[0]) {
-        await uploadImage(result.assets[0].uri, result.assets[0].base64);
+        const uri = result.assets[0].uri;
+        const base64 = result.assets[0].base64;
+        
+        if (uri && base64) {
+          await uploadImage(uri, base64);
+        } else {
+          Alert.alert('Error', 'Could not get image data');
+        }
       }
     } catch (error) {
       console.error('Error taking photo:', error);
@@ -204,7 +365,14 @@ export default function ProfileScreen() {
       });
       
       if (!result.canceled && result.assets && result.assets[0]) {
-        await uploadImage(result.assets[0].uri, result.assets[0].base64);
+        const uri = result.assets[0].uri;
+        const base64 = result.assets[0].base64;
+        
+        if (uri && base64) {
+          await uploadImage(uri, base64);
+        } else {
+          Alert.alert('Error', 'Could not get image data');
+        }
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -212,14 +380,118 @@ export default function ProfileScreen() {
     }
   };
   
-  // Upload image to Supabase Storage
-  const uploadImage = async (uri: string, base64: string | undefined) => {
-    if (!user?.id || !base64) {
-      Alert.alert('Error', 'Could not upload image');
-      return;
-    }
+  // Check for network status
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsOffline(!(state.isConnected && state.isInternetReachable));
+      
+      // If we're back online and have pending changes, sync them
+      if (state.isConnected && state.isInternetReachable) {
+        if (pendingChanges) {
+          syncOfflineChanges();
+        }
+        
+        // Check for pending avatar uploads
+        syncPendingAvatarUploads();
+      }
+    });
     
-    setUploadingImage(true);
+    // Check for any pending changes in storage
+    checkPendingChanges();
+    
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+  
+  // Check if we have any pending profile changes
+  const checkPendingChanges = async () => {
+    try {
+      const pendingProfileChanges = await AsyncStorage.getItem('pending_profile_changes');
+      const pendingAvatarUpload = await AsyncStorage.getItem('pending_avatar_upload');
+      
+      if (pendingProfileChanges || pendingAvatarUpload) {
+        setPendingChanges(true);
+      }
+    } catch (error) {
+      console.error('Error checking pending changes:', error);
+    }
+  };
+  
+  // Sync any offline changes when back online
+  const syncOfflineChanges = async () => {
+    if (!user?.id) return;
+    
+    setSyncingData(true);
+    try {
+      const pendingProfileChanges = await AsyncStorage.getItem('pending_profile_changes');
+      if (pendingProfileChanges) {
+        const profileChanges = JSON.parse(pendingProfileChanges);
+        
+        // Upload to Supabase
+        const { error } = await supabase
+          .from('profiles')
+          .update(profileChanges)
+          .eq('id', user.id);
+        
+        if (error) throw error;
+        
+        // Clear the pending changes
+        await AsyncStorage.removeItem('pending_profile_changes');
+        
+        // Update the local state
+        setUserProfile(prev => ({
+          ...prev,
+          ...profileChanges
+        }));
+        
+        console.log('Offline profile changes synced successfully');
+      }
+      
+      // Check pending avatar changes separately
+      await syncPendingAvatarUploads();
+      
+      // Update pendingChanges state
+      const stillHasPendingChanges = 
+        await AsyncStorage.getItem('pending_profile_changes') || 
+        await AsyncStorage.getItem('pending_avatar_upload');
+        
+      setPendingChanges(!!stillHasPendingChanges);
+      
+    } catch (error) {
+      console.error('Error syncing offline changes:', error);
+    } finally {
+      setSyncingData(false);
+    }
+  };
+  
+  // Sync pending avatar uploads
+  const syncPendingAvatarUploads = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const pendingAvatarUpload = await AsyncStorage.getItem('pending_avatar_upload');
+      if (pendingAvatarUpload) {
+        const { uri, base64 } = JSON.parse(pendingAvatarUpload);
+        
+        // Try to upload the image now
+        const result = await uploadImageToSupabase(uri, base64);
+        if (result.success) {
+          // Remove from pending storage
+          await AsyncStorage.removeItem('pending_avatar_upload');
+          console.log('Pending avatar upload synced successfully');
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing avatar upload:', error);
+    }
+  };
+  
+  // Upload image to Supabase Storage - improved function
+  const uploadImageToSupabase = async (uri: string, base64: string | undefined) => {
+    if (!user?.id || !base64) {
+      return { success: false, error: 'Invalid image data' };
+    }
     
     try {
       // Generate a unique file path
@@ -265,9 +537,47 @@ export default function ProfileScreen() {
         avatar_url: data.publicUrl
       }));
       
-      Alert.alert('Success', 'Profile photo updated successfully');
+      return { success: true, avatarUrl: data.publicUrl };
     } catch (error: any) {
       console.error('Error uploading image:', error);
+      return { success: false, error: error.message || 'Upload failed' };
+    }
+  };
+  
+  // New upload image function with offline support
+  const uploadImage = async (uri: string, base64: string | undefined) => {
+    if (!user?.id || !base64) {
+      Alert.alert('Error', 'Could not upload image');
+      return;
+    }
+    
+    setUploadingImage(true);
+    
+    try {
+      if (isOffline) {
+        // Store for later upload
+        await AsyncStorage.setItem('pending_avatar_upload', JSON.stringify({ uri, base64 }));
+        setPendingChanges(true);
+        
+        // Update UI with temporary local image
+        setUserProfile(prev => ({
+          ...prev,
+          avatar_url: uri  // Use local URI for now
+        }));
+        
+        Alert.alert('Saved Offline', 'Your profile picture will be uploaded when you\'re back online.');
+      } else {
+        // Online upload
+        const result = await uploadImageToSupabase(uri, base64);
+        
+        if (result.success) {
+          Alert.alert('Success', 'Profile picture updated successfully');
+        } else {
+          throw new Error(result.error);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error handling image upload:', error);
       Alert.alert('Upload Failed', error.message || 'Could not upload image');
     } finally {
       setUploadingImage(false);
@@ -298,13 +608,35 @@ export default function ProfileScreen() {
     },
   ];
   
+  // Function to handle opening the edit profile modal
+  const handleEditProfile = () => {
+    // Reset form with current values before showing the modal
+    setEditableProfile({
+      name: user?.name || '',
+      phone: userProfile?.phone || user?.phone || '',
+      department: userProfile?.department || user?.department || '',
+    });
+    setIsEditing(true);
+  };
+  
   // Menu items
   const menuItems = [
+    {
+      icon: <Edit size={20} color={colors.secondary[500]} />,
+      title: 'Edit Profile',
+      onPress: handleEditProfile,
+    },
     {
       icon: <Bell size={20} color={colors.secondary[500]} />,
       title: 'Notification Preferences',
       onPress: () => console.log('Notification preferences'),
     },
+    // Add Admin Dashboard menu item for managers only
+    ...(user?.role === 'manager' ? [{
+      icon: <Shield size={20} color={colors.secondary[500]} />,
+      title: 'Admin Dashboard',
+      onPress: () => router.push('/admin'),
+    }] : []),
     {
       icon: <FileText size={20} color={colors.secondary[500]} />,
       title: 'Documentation',
@@ -364,9 +696,38 @@ export default function ProfileScreen() {
   // Normal profile view when data is loaded
   return (
     <StyledView style={styles.container}>
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <WifiOff size={16} color={colors.white} />
+          <StyledText size="sm" color={colors.white} style={{ marginLeft: 8 }}>
+            You are offline
+          </StyledText>
+        </View>
+      )}
+      
+      {pendingChanges && !isOffline && (
+        <TouchableOpacity 
+          style={styles.syncBanner}
+          onPress={syncOfflineChanges}
+          disabled={syncingData}
+        >
+          {syncingData ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <RefreshCw size={16} color={colors.white} />
+          )}
+          <StyledText size="sm" color={colors.white} style={{ marginLeft: 8 }}>
+            {syncingData ? 'Syncing changes...' : 'Tap to sync pending changes'}
+          </StyledText>
+        </TouchableOpacity>
+      )}
+      
       <ScrollView 
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          (isOffline || pendingChanges) && { paddingTop: 40 }
+        ]}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -407,11 +768,18 @@ export default function ProfileScreen() {
                 </StyledText>
                 
                 <View style={styles.badgeContainer}>
-                  <View style={[styles.roleBadge, { backgroundColor: colors.primary[500] + '20' }]}>
+                  <View style={[
+                    styles.roleBadge, 
+                    { 
+                      backgroundColor: user?.role === 'manager' 
+                        ? colors.secondary[500] + '20' 
+                        : colors.primary[500] + '20' 
+                    }
+                  ]}>
                     <StyledText 
                       size="xs" 
                       weight="medium" 
-                      color={colors.primary[500]}
+                      color={user?.role === 'manager' ? colors.secondary[500] : colors.primary[500]}
                     >
                       {user?.role?.toUpperCase() || 'USER'}
                     </StyledText>
@@ -443,6 +811,79 @@ export default function ProfileScreen() {
             </View>
           </Card>
         </Animated.View>
+        
+        {/* Enhanced Statistics Card */}
+        <Card style={styles.section}>
+          <StyledText size="md" weight="bold" style={styles.sectionTitle}>
+            Performance Metrics
+          </StyledText>
+          
+          <View style={styles.performanceGrid}>
+            <View style={styles.performanceItem}>
+              <StyledText size="2xl" weight="bold" color={extendedColors.primary[500]}>
+                {loading ? '-' : userStats.completedInspections}
+              </StyledText>
+              <StyledText size="xs" color={themeColors.textSecondary}>
+                Completed
+              </StyledText>
+            </View>
+            
+            <View style={styles.performanceItem}>
+              <StyledText size="2xl" weight="bold" color={extendedColors.warning[500]}>
+                {loading ? '-' : userStats.pendingInspections}
+              </StyledText>
+              <StyledText size="xs" color={themeColors.textSecondary}>
+                Pending
+              </StyledText>
+            </View>
+            
+            <View style={styles.performanceItem}>
+              <StyledText size="2xl" weight="bold" color={extendedColors.info[500]}>
+                {loading ? '-' : userStats.inProgressInspections}
+              </StyledText>
+              <StyledText size="xs" color={themeColors.textSecondary}>
+                In Progress
+              </StyledText>
+            </View>
+            
+            <View style={styles.performanceItem}>
+              <StyledText size="2xl" weight="bold" color={extendedColors.error[500]}>
+                {loading ? '-' : userStats.canceledInspections}
+              </StyledText>
+              <StyledText size="xs" color={themeColors.textSecondary}>
+                Canceled
+              </StyledText>
+            </View>
+          </View>
+          
+          <View style={styles.performanceDetail}>
+            <StyledText weight="medium">Completion Rate</StyledText>
+            <View style={styles.progressBarContainer}>
+              <View style={[
+                styles.progressBar, 
+                { width: `${userStats.completionRate}%`, backgroundColor: colors.primary[500] }
+              ]} />
+            </View>
+            <StyledText>{userStats.completionRate}%</StyledText>
+          </View>
+          
+          <View style={styles.performanceDetail}>
+            <StyledText weight="medium">On-Time Completion</StyledText>
+            <View style={styles.progressBarContainer}>
+              <View style={[
+                styles.progressBar, 
+                { width: `${userStats.onTimeCompletion}%`, backgroundColor: colors.success[500] }
+              ]} />
+            </View>
+            <StyledText>{userStats.onTimeCompletion}%</StyledText>
+          </View>
+          
+          {userStats.lastCompletedDate && (
+            <StyledText size="xs" color={themeColors.textSecondary} style={{ marginTop: 10 }}>
+              Last completed inspection: {new Date(userStats.lastCompletedDate).toLocaleDateString()}
+            </StyledText>
+          )}
+        </Card>
         
         {/* User Info */}
         <Card style={styles.section}>
@@ -526,6 +967,68 @@ export default function ProfileScreen() {
           Version 1.0.0
         </StyledText>
       </ScrollView>
+      
+      {/* Profile Edit Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isEditing}
+        onRequestClose={() => setIsEditing(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.card }]}>
+            <View style={styles.modalHeader}>
+              <StyledText size="xl" weight="bold">Edit Profile</StyledText>
+              <TouchableOpacity onPress={() => setIsEditing(false)}>
+                <X size={24} color={themeColors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.formGroup}>
+              <StyledText style={styles.label}>Name</StyledText>
+              <Input
+                value={editableProfile.name}
+                onChangeText={(text) => setEditableProfile({...editableProfile, name: text})}
+                placeholder="Your name"
+              />
+            </View>
+            
+            <View style={styles.formGroup}>
+              <StyledText style={styles.label}>Phone</StyledText>
+              <Input
+                value={editableProfile.phone}
+                onChangeText={(text) => setEditableProfile({...editableProfile, phone: text})}
+                placeholder="Your phone number"
+                keyboardType="phone-pad"
+              />
+            </View>
+            
+            <View style={styles.formGroup}>
+              <StyledText style={styles.label}>Department</StyledText>
+              <Input
+                value={editableProfile.department}
+                onChangeText={(text) => setEditableProfile({...editableProfile, department: text})}
+                placeholder="Your department"
+              />
+            </View>
+            
+            <View style={styles.modalActions}>
+              <Button
+                onPress={() => setIsEditing(false)}
+                style={styles.cancelButton}
+                variant="secondary"
+                title="Cancel"
+              />
+              <Button
+                onPress={handleUpdateProfile}
+                style={styles.saveButton}
+                loading={loading}
+                title="Save Changes"
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </StyledView>
   );
 }
@@ -669,5 +1172,97 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.error[400],
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    borderRadius: 10,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  formGroup: {
+    marginBottom: 15,
+  },
+  label: {
+    marginBottom: 5,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 20,
+  },
+  cancelButton: {
+    marginRight: 10,
+  },
+  saveButton: {
+    minWidth: 120,
+  },
+  performanceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  performanceItem: {
+    width: '25%',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  performanceDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  progressBarContainer: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 4,
+    marginHorizontal: 12,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  offlineBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.error[500],
+    padding: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  syncBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.primary[500],
+    padding: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
   },
 });
