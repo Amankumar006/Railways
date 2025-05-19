@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { AuthState, User } from '@/types';
 import { Platform } from 'react-native';
@@ -54,6 +54,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading: true,
     error: null,
   });
+  
+  const isMounted = useRef(true);
+
+  // Safe setState that only updates if component is mounted
+  const safeSetState = (newState: Partial<AuthState>) => {
+    if (isMounted.current) {
+      setState(prev => ({ ...prev, ...newState }));
+    }
+  };
 
   useEffect(() => {
     // Set up auth state change listener
@@ -62,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (session) {
           try {
             const user = await mapUserData(session);
-            setState({
+            safeSetState({
               isAuthenticated: true,
               user,
               token: session.access_token,
@@ -71,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           } catch (error) {
             console.error('Error processing session:', error);
-            setState({
+            safeSetState({
               isAuthenticated: false,
               user: null,
               token: null,
@@ -80,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           }
         } else {
-          setState({
+          safeSetState({
             isAuthenticated: false,
             user: null,
             token: null,
@@ -98,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (session) {
           const user = await mapUserData(session);
-          setState({
+          safeSetState({
             isAuthenticated: true,
             user,
             token: session.access_token,
@@ -106,11 +115,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             error: null,
           });
         } else {
-          setState(prev => ({ ...prev, loading: false }));
+          safeSetState({ loading: false });
         }
       } catch (error) {
         console.error('Session check error:', error);
-        setState({
+        safeSetState({
           isAuthenticated: false,
           user: null,
           token: null,
@@ -122,57 +131,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     checkSession();
 
-    // Cleanup subscription
+    // Cleanup function
     return () => {
+      isMounted.current = false;
       subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    safeSetState({ loading: true, error: null });
     
     try {
-      const { user, session } = await supabaseAuth.signIn(email, password);
+      const { data, error } = await supabaseAuth.signIn(email, password);
       
-      if (!session) {
-        throw new Error('No session returned from login');
-      }
+      if (error) throw error;
+      if (!data.session) throw new Error('No session returned from login');
       
-      const userData = await mapUserData(session);
+      const userData = await mapUserData(data.session);
       
-      setState({
+      safeSetState({
         isAuthenticated: true,
         user: userData,
-        token: session.access_token,
+        token: data.session.access_token,
         loading: false,
         error: null,
       });
     } catch (error: any) {
       console.error('Login error:', error);
-      setState(prev => ({
-        ...prev,
+      safeSetState({
         loading: false,
         error: error.message || 'Login failed',
-      }));
+      });
     }
   };
 
   const signup = async (email: string, password: string, userData: Partial<User>) => {
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    safeSetState({ loading: true, error: null });
     
     try {
-      // Sign up with Supabase Auth
-      const { user, session } = await supabaseAuth.signUp(email, password);
+      const { data, error } = await supabaseAuth.signUp(email, password);
       
-      if (!user) {
-        throw new Error('User registration failed');
-      }
+      if (error) throw error;
+      if (!data.user) throw new Error('User registration failed');
       
       // Create user profile in profiles table
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
-          id: user.id,
+          id: data.user.id,
           name: userData.name || 'New User',
           email,
           role: userData.role || 'inspector',
@@ -183,60 +189,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (profileError) {
         console.error('Profile creation error:', profileError);
-        // Continue despite profile error, it will be handled in onAuthStateChange
       }
       
-      // Auth state will be updated by the listener
-      setState(prev => ({ 
-        ...prev, 
-        loading: false, 
-        error: null, 
-        // Don't set auth info here, wait for onAuthStateChange 
-      }));
+      safeSetState({ loading: false, error: null });
     } catch (error: any) {
       console.error('Signup error:', error);
-      setState(prev => ({
-        ...prev,
+      safeSetState({
         loading: false,
         error: error.message || 'Signup failed',
-      }));
+      });
     }
   };
 
   const resetPassword = async (email: string) => {
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    safeSetState({ loading: true, error: null });
     
     try {
       await supabaseAuth.resetPassword(email);
-      
-      setState(prev => ({ 
-        ...prev, 
-        loading: false, 
-        error: null,
-      }));
+      safeSetState({ loading: false, error: null });
     } catch (error: any) {
       console.error('Password reset error:', error);
-      setState(prev => ({
-        ...prev,
+      safeSetState({
         loading: false,
         error: error.message || 'Password reset failed',
-      }));
+      });
     }
   };
 
   const logout = async () => {
-    setState(prev => ({ ...prev, loading: true }));
+    safeSetState({ loading: true });
     
     try {
-      // Use the auth.signOut() function from our lib/supabase.ts
-      await auth.signOut();
+      await supabaseAuth.signOut();
       
-      // Clear any stored session data
       if (Platform.OS !== 'web') {
         await SecureStore.deleteItemAsync('supabase-auth-token');
       }
       
-      setState({
+      safeSetState({
         isAuthenticated: false,
         user: null,
         token: null,
@@ -245,11 +235,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } catch (error: any) {
       console.error('Logout error:', error);
-      setState(prev => ({
-        ...prev,
+      safeSetState({
         loading: false,
         error: error.message || 'Logout failed',
-      }));
+      });
     }
   };
 
