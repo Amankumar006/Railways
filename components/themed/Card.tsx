@@ -49,7 +49,13 @@ export function Card({
 
   return (
     <StyledView style={cardStyles} backgroundColor={colors.card} {...otherProps}>
-      {children}
+      {React.Children.map(children, child => {
+        // Filter out text nodes that are just whitespace or periods
+        if (typeof child === 'string' && (child.trim() === '' || child === '.')) {
+          return null;
+        }
+        return child;
+      })}
     </StyledView>
   );
 }

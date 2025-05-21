@@ -1,0 +1,365 @@
+import React, { useState } from 'react';
+import { 
+  ScrollView, 
+  StyleSheet, 
+  View, 
+  TouchableOpacity,
+  TextInput
+} from 'react-native';
+import { StyledView } from '@/components/themed/StyledView';
+import { StyledText } from '@/components/themed/StyledText';
+import { Card } from '@/components/themed/Card';
+import { useRouter } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+import { colorScheme } from '@/constants/Colors';
+import { useColorScheme } from 'react-native';
+import { ChevronDown, ChevronUp } from 'lucide-react-native';
+
+// Activity type definition
+type ActivityItem = {
+  id: number;
+  activity: string;
+  checkStatus: 'pending' | 'checked' | 'checked-okay' | 'checked-not-okay';
+  isCompulsory: boolean;
+  remarks: string;
+};
+
+// Bogie activities
+const bogieActivities: ActivityItem[] = [
+  {
+    id: 1,
+    activity: 'Visually inspect the bogie frame and their components for crack, loose, missing and leakage etc. and check whether all equipment is secure.',
+    checkStatus: 'pending',
+    isCompulsory: false,
+    remarks: ''
+  },
+  {
+    id: 2,
+    activity: 'Perform visual check on longitudinal beams, cross beams for cracks,damages and corrosion.',
+    checkStatus: 'pending',
+    isCompulsory: false,
+    remarks: ''
+  },
+  {
+    id: 3,
+    activity: 'Perform visual check on brake supports, damper supports, traction center supports and stabilizer assembly supports for cracks, damages and',
+    checkStatus: 'pending',
+    isCompulsory: false,
+    remarks: ''
+  }
+];
+
+export default function TripReport() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const colorMode = useColorScheme() ?? 'light';
+  const themeColors = colorScheme[colorMode];
+  
+  // State variables
+  const [trainNumber, setTrainNumber] = useState('22301');
+  const [redOnTime, setRedOnTime] = useState('');
+  const [redOffTime, setRedOffTime] = useState('');
+  const [activities, setActivities] = useState<ActivityItem[]>(bogieActivities);
+  const [showActivities, setShowActivities] = useState(true);
+  
+  // Handle check status change
+  const handleCheckStatusChange = (id: number, status: ActivityItem['checkStatus']) => {
+    setActivities(
+      activities.map(item => 
+        item.id === id ? { ...item, checkStatus: status } : item
+      )
+    );
+  };
+  
+  // Handle remarks change
+  const handleRemarksChange = (id: number, remarks: string) => {
+    setActivities(
+      activities.map(item => 
+        item.id === id ? { ...item, remarks } : item
+      )
+    );
+  };
+  
+  // Render check status options
+  const renderCheckOptions = (item: ActivityItem) => {
+    return (
+      <View style={styles.checkOptionsContainer}>
+        <TouchableOpacity 
+          style={[
+            styles.checkOption, 
+            item.checkStatus === 'checked-okay' && styles.activeOption
+          ]}
+          onPress={() => handleCheckStatusChange(item.id, 'checked-okay')}
+        >
+          <StyledText size="sm">Checked Okay</StyledText>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[
+            styles.checkOption, 
+            item.checkStatus === 'checked-not-okay' && styles.activeOption
+          ]}
+          onPress={() => handleCheckStatusChange(item.id, 'checked-not-okay')}
+        >
+          <StyledText size="sm">Checked Not Okay</StyledText>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+  
+  return (
+    <StyledView style={styles.container}>
+      <ScrollView>
+        {/* Header Section */}
+        <Card style={styles.headerCard}>
+          <View style={styles.headerRow}>
+            <View style={[styles.headerCell, styles.headerLabelCell]}>
+              <StyledText size="sm" weight="bold">Date:</StyledText>
+            </View>
+            <View style={[styles.headerCell, { flex: 1 }]}>
+              <StyledText>{new Date().toLocaleDateString()}</StyledText>
+            </View>
+          </View>
+          
+          <View style={styles.headerRow}>
+            <View style={[styles.headerCell, { borderLeftWidth: 1 }]}>
+              <StyledText size="sm" weight="bold">Train No:</StyledText>
+            </View>
+            <View style={[styles.headerCell, { flex: 1 }]}>
+              <TextInput
+                style={styles.trainInput}
+                value={trainNumber}
+                onChangeText={setTrainNumber}
+              />
+            </View>
+          </View>
+          
+          <View style={styles.headerRow}>
+            <View style={[styles.headerCell, { borderLeftWidth: 1 }]}>
+              <StyledText size="sm" weight="bold">RED On:</StyledText>
+            </View>
+            <View style={[styles.headerCell, { flex: 1 }]}>
+              <TextInput
+                style={styles.timeInput}
+                value={redOnTime}
+                onChangeText={setRedOnTime}
+                placeholder="HH:MM"
+              />
+            </View>
+            <View style={[styles.headerCell, { borderLeftWidth: 1 }]}>
+              <StyledText size="sm" weight="bold">RED Off:</StyledText>
+            </View>
+            <View style={[styles.headerCell, { flex: 1 }]}>
+              <TextInput
+                style={styles.timeInput}
+                value={redOffTime}
+                onChangeText={setRedOffTime}
+                placeholder="HH:MM"
+              />
+            </View>
+          </View>
+        </Card>
+        
+        {/* Bogie Activities Section */}
+        <Card style={styles.sectionCard}>
+          <TouchableOpacity 
+            onPress={() => setShowActivities(!showActivities)}
+            style={styles.sectionHeader}
+          >
+            <StyledText size="md" weight="bold">Bogie Activities</StyledText>
+            {showActivities ? (
+              <ChevronUp size={24} color={themeColors.text} />
+            ) : (
+              <ChevronDown size={24} color={themeColors.text} />
+            )}
+          </TouchableOpacity>
+          
+          {showActivities && (
+            <View>
+              {/* Table Header */}
+              <View style={styles.tableHeader}>
+                <View style={[styles.tableHeaderCell, { width: 40 }]}>
+                  <StyledText size="sm" weight="bold">No.</StyledText>
+                </View>
+                <View style={[styles.tableHeaderCell, { flex: 3 }]}>
+                  <StyledText size="sm" weight="bold">Activity</StyledText>
+                </View>
+                <View style={[styles.tableHeaderCell, { flex: 1 }]}>
+                  <StyledText size="sm" weight="bold">Status</StyledText>
+                </View>
+                <View style={[styles.tableHeaderCell, { flex: 1 }]}>
+                  <StyledText size="sm" weight="bold">Remarks</StyledText>
+                </View>
+              </View>
+              
+              {/* Activity Items */}
+              {activities.map((item) => (
+                <View key={item.id} style={styles.activityRow}>
+                  <View style={[styles.tableCell, { width: 40 }]}>
+                    <StyledText size="sm">{item.id}</StyledText>
+                  </View>
+                  <View style={[styles.tableCell, { flex: 3 }]}>
+                    <StyledText size="sm">{item.activity}</StyledText>
+                  </View>
+                  <View style={[styles.tableCell, { flex: 1 }]}>
+                    {renderCheckOptions(item)}
+                  </View>
+                  <View style={[styles.tableCell, { flex: 1 }]}>
+                    <StyledText size="sm">
+                      {item.isCompulsory ? 'Compulsory' : 'Not compulsory'}
+                    </StyledText>
+                    <TextInput
+                      style={styles.remarksInput}
+                      placeholder="Add remarks"
+                      value={item.remarks}
+                      onChangeText={(text) => handleRemarksChange(item.id, text)}
+                      multiline
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </Card>
+        
+        {/* Submit Button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.submitButton}>
+            <StyledText size="md" weight="bold" style={styles.buttonText}>Submit Report</StyledText>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </StyledView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  headerCard: {
+    marginBottom: 10,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  headerLabelCell: {
+    width: 60,
+  },
+  headerCell: {
+    padding: 8,
+    borderRightWidth: 1,
+    borderColor: '#ddd',
+    justifyContent: 'center',
+  },
+  subHeaderRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  scheduleRow: {
+    padding: 8,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    backgroundColor: '#f0f8f0',
+  },
+  trainInfoRow: {
+    flexDirection: 'row',
+  },
+  redText: {
+    color: 'red',
+  },
+  greenText: {
+    color: 'green',
+  },
+  primaryText: {
+    color: '#ff6347', // Tomato color for Primary Maintenance
+  },
+  timeInput: {
+    height: 30,
+    borderWidth: 0,
+    padding: 0,
+    width: 60,
+  },
+  trainInput: {
+    height: 30,
+    borderWidth: 0,
+    padding: 0,
+  },
+  sectionCard: {
+    marginBottom: 10,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  tableHeaderCell: {
+    padding: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#ddd',
+  },
+  activityRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  tableCell: {
+    padding: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#ddd',
+  },
+  checkOptionsContainer: {
+    flexDirection: 'column',
+  },
+  checkOption: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    marginBottom: 4,
+    backgroundColor: '#f5f5f5',
+  },
+  activeOption: {
+    backgroundColor: '#e0f0ff',
+  },
+  remarksInput: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 4,
+    padding: 4,
+    minHeight: 60,
+  },
+  buttonContainer: {
+    marginVertical: 20,
+    alignItems: 'center',
+  },
+  submitButton: {
+    backgroundColor: '#3498db',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 6,
+  },
+  buttonText: {
+    color: 'white',
+  },
+});

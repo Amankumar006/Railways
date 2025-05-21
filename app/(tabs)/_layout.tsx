@@ -3,14 +3,16 @@ import { Tabs } from 'expo-router';
 import { useColorScheme } from 'react-native';
 import { colorScheme } from '@/constants/Colors';
 import { Chrome as Home, Calendar, Bell, User } from 'lucide-react-native';
+import { RequireAuth } from '@/components/auth/RequireAuth';
 
 export default function TabLayout() {
   const colorMode = useColorScheme() ?? 'light';
   const colors = colorScheme[colorMode];
 
   return (
-    <Tabs
-      screenOptions={{
+    <RequireAuth>
+      <Tabs
+        screenOptions={{
         tabBarActiveTintColor: colors.tabBarActiveIcon,
         tabBarInactiveTintColor: colors.tabBarIcon,
         tabBarStyle: {
@@ -64,6 +66,7 @@ export default function TabLayout() {
           ),
         }}
       />
-    </Tabs>
+      </Tabs>
+    </RequireAuth>
   );
 }

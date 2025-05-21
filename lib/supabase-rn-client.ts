@@ -12,59 +12,76 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-// Create a single supabase client for interacting with your database
-export const supabase = createClient<Database>(
-  supabaseUrl,
-  supabaseAnonKey,
-  {
-    // Disable realtime subscriptions on Android to avoid Node.js module compatibility issues
-    realtime: {
-      params: {
-        // Completely disable WebSocket connections on Android
-        eventsPerSecond: Platform.OS === 'android' ? 0 : 1,
-      },
-    },
-    auth: {
-      persistSession: true, // Enable session persistence
-      detectSessionInUrl: Platform.OS === 'web', // Only detect sessions in URL on web
-      storage: {
-        getItem: async (key: string) => {
-          if (Platform.OS === 'web') {
-            return localStorage.getItem(key);
-          }
-          try {
-            return await SecureStore.getItemAsync(key);
-          } catch (error) {
-            console.error('SecureStore getItem error:', error);
-            return null;
-          }
-        },
-        setItem: async (key: string, value: string) => {
-          if (Platform.OS === 'web') {
-            localStorage.setItem(key, value);
-            return;
-          }
-          try {
-            await SecureStore.setItemAsync(key, value);
-          } catch (error) {
-            console.error('SecureStore setItem error:', error);
-          }
-        },
-        removeItem: async (key: string) => {
-          if (Platform.OS === 'web') {
-            localStorage.removeItem(key);
-            return;
-          }
-          try {
-            await SecureStore.deleteItemAsync(key);
-          } catch (error) {
-            console.error('SecureStore removeItem error:', error);
-          }
+// Create a platform-specific Supabase client
+export const createSupabaseClient = () => {
+  const isAndroid = Platform.OS === 'android';
+  
+  return createClient<Database>(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      // Disable realtime completely on Android
+      realtime: {
+        params: {
+          eventsPerSecond: isAndroid ? 0 : 1,
         },
       },
-    },
+      global: {
+        // Disable WebSockets on Android
+        fetch: isAndroid ? customFetchWithoutWebsocket : undefined,
+      },
+      auth: {
+        persistSession: false, // We'll handle session persistence ourselves
+        detectSessionInUrl: false, // Disable session detection in URL for mobile
+        storage: {
+          getItem: async (key: string) => {
+            try {
+              return await SecureStore.getItemAsync(key);
+            } catch {
+              // Fallback for web
+              return localStorage.getItem(key);
+            }
+          },
+          setItem: async (key: string, value: string) => {
+            try {
+              await SecureStore.setItemAsync(key, value);
+            } catch {
+              // Fallback for web
+              localStorage.setItem(key, value);
+            }
+          },
+          removeItem: async (key: string) => {
+            try {
+              await SecureStore.deleteItemAsync(key);
+            } catch {
+              // Fallback for web
+              localStorage.removeItem(key);
+            }
+          },
+        },
+      },
+    }
+  );
+};
+
+// Custom fetch function that prevents WebSocket connections on Android
+async function customFetchWithoutWebsocket(url: RequestInfo | URL, init?: RequestInit) {
+  // If this is a WebSocket connection attempt, block it on Android
+  if (typeof url === 'string' && (url.startsWith('ws:') || url.startsWith('wss:'))) {
+    console.log('WebSocket connection blocked on Android:', url);
+    // Return a fake response to prevent errors
+    return new Response(JSON.stringify({ error: 'WebSockets are disabled on Android' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
-);
+  
+  // For regular HTTP requests, use the standard fetch
+  return fetch(url, init);
+}
+
+// Create a single instance of the client
+export const supabase = createSupabaseClient();
 
 // Helper function to check if we're running in a browser
 export const isBrowser = () => typeof window !== 'undefined';
@@ -171,19 +188,18 @@ export const db = {
     },
   },
   
-  // Real-time subscriptions
+  // Real-time subscriptions - WITH PLATFORM CHECK
   subscriptions: {
     schedules: (callback: (payload: any) => void) => {
-      // Skip real-time subscriptions on Android
+      // Skip subscriptions on Android
       if (Platform.OS === 'android') {
-        console.log('Real-time subscriptions are disabled on Android');
+        console.log('Real-time subscriptions are not supported on Android');
         return {
-          // Return a dummy subscription object
           unsubscribe: () => {},
         };
       }
       
-      // Normal subscription for iOS and web
+      // Normal subscription for other platforms
       return supabase
         .channel('schedules')
         .on(
@@ -224,18 +240,6 @@ export const auth = {
   
   signOut: async () => {
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  },
-  
-  resetPassword: async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    if (error) throw error;
-  },
-  
-  updatePassword: async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
     if (error) throw error;
   },
 };

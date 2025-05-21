@@ -2,16 +2,20 @@ import React from 'react';
 import { StyleSheet, View, TouchableOpacity, useColorScheme } from 'react-native';
 import { StyledText } from './themed/StyledText';
 import { Notification } from '@/types';
-import { Bell, Calendar, Megaphone, Clock } from 'lucide-react-native';
+import { Bell, Calendar, Megaphone, Clock, Check, X, UserCircle } from 'lucide-react-native';
 import { colors, colorScheme } from '@/constants/Colors';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { Button } from './themed/Button';
 
 interface NotificationItemProps {
   notification: Notification;
   onPress: (notification: Notification) => void;
+  onApprove?: (userId: string) => void;
+  onReject?: (userId: string) => void;
+  showApprovalButtons?: boolean;
 }
 
-export function NotificationItem({ notification, onPress }: NotificationItemProps) {
+export function NotificationItem({ notification, onPress, onApprove, onReject, showApprovalButtons = false }: NotificationItemProps) {
   const theme = useColorScheme() ?? 'light';
   const themeColors = colorScheme[theme];
   
@@ -36,6 +40,8 @@ export function NotificationItem({ notification, onPress }: NotificationItemProp
         return <Clock size={iconSize} color={iconColor} />;
       case 'system':
         return <Megaphone size={iconSize} color={iconColor} />;
+      case 'approval':
+        return <UserCircle size={iconSize} color={iconColor} />;
       default:
         return <Bell size={iconSize} color={iconColor} />;
     }
@@ -52,6 +58,8 @@ export function NotificationItem({ notification, onPress }: NotificationItemProp
         return colors.warning[500];
       case 'system':
         return colors.error[500];
+      case 'approval':
+        return colors.success[500];
       default:
         return colors.neutral[500];
     }
@@ -98,6 +106,29 @@ export function NotificationItem({ notification, onPress }: NotificationItemProp
           >
             {formatTimestamp(notification.timestamp)}
           </StyledText>
+
+          {/* Approval buttons for pending users */}
+          {showApprovalButtons && notification.type === 'approval' && notification.relatedId && (
+            <View style={styles.approvalActions}>
+              <Button
+                title="Approve"
+                onPress={() => onApprove && onApprove(notification.relatedId!)}
+                style={styles.approveButton}
+                size="sm"
+                icon={<Check size={16} color={colors.white} />}
+                iconPosition="left"
+              />
+              <TouchableOpacity
+                onPress={() => onReject && onReject(notification.relatedId!)}
+                style={styles.rejectButton}
+              >
+                <X size={16} color={colors.white} style={{ marginRight: 4 }} />
+                <StyledText size="sm" weight="medium" color={colors.white}>
+                  Reject
+                </StyledText>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         
         {!notification.read && (
@@ -139,5 +170,23 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     alignSelf: 'flex-start',
     marginTop: 8,
+  },
+  approvalActions: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 8,
+  },
+  approveButton: {
+    minWidth: 100,
+  },
+  rejectButton: {
+    minWidth: 100,
+    backgroundColor: colors.error[500],
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

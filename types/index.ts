@@ -1,5 +1,8 @@
 // User roles
-export type UserRole = 'inspector' | 'supervisor' | 'manager';
+export type UserRole = 'inspector' | 'manager';
+
+// User approval status
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 // User profile
 export interface User {
@@ -10,6 +13,8 @@ export interface User {
   avatar?: string;
   department?: string;
   phone?: string;
+  approvalStatus?: ApprovalStatus;
+  approvalDeniedReason?: string;
 }
 
 // Authentication state
@@ -19,6 +24,7 @@ export interface AuthState {
   token: string | null;
   loading: boolean;
   error: string | null;
+  pendingApproval?: boolean;
 }
 
 // Coach inspection status
@@ -40,7 +46,7 @@ export interface Schedule {
   id: string;
   coach: Coach;
   assignedTo: User;
-  supervisedBy?: User;
+  // Removed supervisedBy field as we're eliminating the supervisor role
   status: InspectionStatus;
   scheduledDate: string;
   completedDate?: string;
@@ -57,7 +63,7 @@ export interface Notification {
   message: string;
   timestamp: string;
   read: boolean;
-  type: 'schedule' | 'assignment' | 'reminder' | 'system';
+  type: 'schedule' | 'assignment' | 'reminder' | 'system' | 'approval';
   relatedId?: string;
 }
 

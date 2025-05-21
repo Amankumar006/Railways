@@ -10,17 +10,41 @@
   2. Security
     - Enable RLS on all tables
     - Add policies for authenticated access
+
+  3. Role Hierarchy:
+    - inspector: basic user that performs inspections
+    - supervisor: can manage coaches and review schedules
+    - manager: has full access to all data
 */
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Create enum types
-CREATE TYPE user_role AS ENUM ('inspector', 'supervisor');
-CREATE TYPE inspection_status AS ENUM ('pending', 'in-progress', 'completed', 'canceled');
-CREATE TYPE inspection_type AS ENUM ('gear', 'interior', 'exterior', 'comprehensive');
-CREATE TYPE priority_level AS ENUM ('low', 'medium', 'high');
+-- Create enum types if they don't exist already
+DO $$ 
+BEGIN
+  -- Check if user_role type already exists
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    CREATE TYPE user_role AS ENUM ('inspector', 'supervisor', 'manager');
+  END IF;
+  
+  -- Check if inspection_status type already exists
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inspection_status') THEN
+    CREATE TYPE inspection_status AS ENUM ('pending', 'in-progress', 'completed', 'canceled');
+  END IF;
+  
+  -- Check if inspection_type type already exists
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inspection_type') THEN
+    CREATE TYPE inspection_type AS ENUM ('gear', 'interior', 'exterior', 'comprehensive');
+  END IF;
+  
+  -- Check if priority_level type already exists
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'priority_level') THEN
+    CREATE TYPE priority_level AS ENUM ('low', 'medium', 'high');
+  END IF;
+END $$;
 
+-- Create tables with IF NOT EXISTS to ensure idempotence
 -- Profiles table
 CREATE TABLE IF NOT EXISTS profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id),
@@ -94,6 +118,12 @@ CREATE POLICY "Users can update their own profile"
   FOR UPDATE
   TO authenticated
   USING (auth.uid() = id);
+
+CREATE POLICY "Users can create their own profile"
+  ON profiles
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = id);
 
 -- Coaches policies
 CREATE POLICY "Users can read all coaches"

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
 import { Input } from '@/components/themed/Input';
 import { Button } from '@/components/themed/Button';
 import { useAuth } from '@/context/AuthContext';
-import { Mail, Lock } from 'lucide-react-native';
+import { Mail, Lock, CheckCircle } from 'lucide-react-native';
 import { colors } from '@/constants/Colors';
 import { ROUTES } from '@/constants/Routes';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -16,6 +16,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   
   const { login, loading, error } = useAuth();
   const router = useRouter();
@@ -52,12 +53,16 @@ export default function LoginScreen() {
     const isPasswordValid = validatePassword(password);
 
     if (isEmailValid && isPasswordValid) {
-      await login(email, password);
+      await login(email, password, rememberMe);
     }
+  };
+  
+  const toggleRememberMe = () => {
+    setRememberMe(prev => !prev);
   };
 
   const navigateToForgotPassword = () => {
-    router.push(`/(auth)/${ROUTES.AUTH.FORGOT_PASSWORD}`);
+    router.push('/(auth)/forgot-password');
   };
 
   return (
@@ -75,9 +80,9 @@ export default function LoginScreen() {
           entering={FadeInDown.duration(800).delay(200)}
         >
           <Image 
-            source={{ uri: 'https://images.pexels.com/photos/5090237/pexels-photo-5090237.jpeg' }} 
+            source={{ uri: 'https://images.pexels.com/photos/7245887/pexels-photo-7245887.jpeg' }} 
             style={styles.backgroundImage}
-            blurRadius={3}
+            blurRadius={2}
           />
           <StyledView style={styles.logoOverlay} backgroundColor="transparent">
             <StyledText size="4xl" weight="bold" color={colors.white} style={styles.logoText}>
@@ -95,7 +100,7 @@ export default function LoginScreen() {
           </StyledText>
           
           <StyledText size="md" style={styles.subtitle}>
-            Sign in to your account to continue
+            Sign in to your account to continue with coach inspections
           </StyledText>
 
           {error && (
@@ -132,14 +137,35 @@ export default function LoginScreen() {
             autoCorrect={false}
           />
           
-          <TouchableOpacity 
-            onPress={navigateToForgotPassword}
-            style={styles.forgotPasswordContainer}
-          >
-            <StyledText size="sm" color={colors.primary[500]}>
-              Forgot password?
-            </StyledText>
-          </TouchableOpacity>
+          <View style={styles.rememberForgotContainer}>
+            <TouchableOpacity 
+              style={styles.rememberMeContainer} 
+              onPress={toggleRememberMe}
+              activeOpacity={0.7}
+            >
+              <View style={styles.checkboxContainer}>
+                {rememberMe ? (
+                  <StyledView style={styles.checkbox} backgroundColor={colors.primary[500]}>
+                    <CheckCircle size={14} color={colors.white} />
+                  </StyledView>
+                ) : (
+                  <StyledView style={styles.checkbox} backgroundColor={colors.neutral[100]} />
+                )}
+              </View>
+              <StyledText size="sm">
+                Remember me
+              </StyledText>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={navigateToForgotPassword}
+              style={styles.forgotPasswordContainer}
+            >
+              <StyledText size="sm" color={colors.primary[500]}>
+                Forgot password?
+              </StyledText>
+            </TouchableOpacity>
+          </View>
 
           <Button
             title="Sign In"
@@ -154,7 +180,7 @@ export default function LoginScreen() {
             <StyledText size="sm">
               Don't have an account?
             </StyledText>
-            <Link href={`/(auth)/${ROUTES.AUTH.SIGNUP}`} asChild>
+            <Link href="/(auth)/signup" asChild>
               <TouchableOpacity style={styles.signupButton}>
                 <StyledText size="sm" weight="bold" color={colors.primary[500]}>
                   {" "}Sign up
@@ -189,9 +215,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoText: {
+    // Using the deprecated properties with a comment to explain why
+    // These are flagged as deprecated but the TypeScript types don't support textShadow yet
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 5,
+    // Note: The proper way would be to use textShadow: '1px 1px 5px rgba(0, 0, 0, 0.75)',
+    // but this isn't supported in the TypeScript types yet
   },
   formContainer: {
     paddingHorizontal: 24,
@@ -209,10 +239,32 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
   },
-  forgotPasswordContainer: {
-    alignSelf: 'flex-end',
+  rememberForgotContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
     marginTop: 8,
     marginBottom: 16,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkboxContainer: {
+    marginRight: 8,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+  },
+  forgotPasswordContainer: {
+    alignSelf: 'flex-end',
   },
   loginButton: {
     marginTop: 8,

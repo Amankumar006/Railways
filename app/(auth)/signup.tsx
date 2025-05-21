@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
 import { Input } from '@/components/themed/Input';
 import { Button } from '@/components/themed/Button';
 import { useAuth } from '@/context/AuthContext';
-import { Mail, Lock, User, Phone, Building } from 'lucide-react-native';
+import { Mail, Lock, User, Phone, Building, Info, AlertCircle } from 'lucide-react-native';
 import { colors } from '@/constants/Colors';
 import { ROUTES } from '@/constants/Routes';
 import { UserRole } from '@/types';
@@ -78,29 +78,64 @@ export default function SignupScreen() {
     }
   };
 
-  const handleSignup = async () => {
+  const handleSignup = () => {
+    console.log('Signup button clicked');
     const isNameValid = validateName(name);
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
     const isConfirmPasswordValid = validateConfirmPassword(confirmPassword);
 
+    console.log('Validation results:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
+
     if (isNameValid && isEmailValid && isPasswordValid && isConfirmPasswordValid) {
-      try {
-        // Default role is 'inspector', but can be changed to 'manager' or 'supervisor' later
-        await signup(email, password, {
-          name,
-          email,
-          role: 'inspector' as UserRole,
-          department,
-          phone,
-        });
-        
-        // Note: No need to navigate, AuthContext will handle that upon successful login
-      } catch (error) {
-        console.error('Signup failed:', error);
-      }
+      // Show approval information before signing up
+      Alert.alert(
+        'Approval Required',
+        'After signing up, your account will require approval from a manager before you can use the app. This typically takes 1-2 business days.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Continue', 
+            onPress: () => {
+              console.log('Continue pressed, calling signup with:', email);
+              // Create the user data object
+              const userData = {
+                name,
+                email,
+                role: 'inspector' as UserRole,
+                department: department || undefined,
+                phone: phone || undefined,
+              };
+              
+              console.log('User data for signup:', userData);
+              
+              try {
+                // Call the signup function from AuthContext
+                signup(email, password, userData);
+                console.log('Signup function called successfully');
+              } catch (error) {
+                console.error('Error calling signup function:', error);
+                Alert.alert(
+                  'Signup Error',
+                  'An error occurred while trying to sign up. Please try again.',
+                  [{ text: 'OK' }]
+                );
+              }
+            }
+          }
+        ]
+      );
+    } else {
+      console.log('Validation failed:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
+      Alert.alert(
+        'Validation Error',
+        'Please correct the errors in the form.',
+        [{ text: 'OK' }]
+      );
     }
   };
+  
+  // No helper functions needed - AuthContext handles all state management
 
   return (
     <KeyboardAvoidingView 
@@ -130,8 +165,20 @@ export default function SignupScreen() {
           </StyledText>
           
           <StyledText size="md" style={styles.subtitle}>
-            Sign up to get started
+            Sign up to get started with coach inspections
           </StyledText>
+          
+          <StyledView 
+            style={styles.infoContainer} 
+            backgroundColor={colors.primary[50]}
+          >
+            <View style={styles.infoIconContainer}>
+              <Info size={18} color={colors.primary[500]} />
+            </View>
+            <StyledText size="sm" style={styles.infoText}>
+              New accounts require manager approval before access is granted
+            </StyledText>
+          </StyledView>
         </Animated.View>
 
         <Animated.View 
@@ -225,7 +272,7 @@ export default function SignupScreen() {
             <StyledText size="sm">
               Already have an account?
             </StyledText>
-            <Link href={`/(auth)/${ROUTES.AUTH.LOGIN}`} asChild>
+            <Link href="/(auth)/login" asChild>
               <TouchableOpacity style={styles.loginLink}>
                 <StyledText size="sm" weight="bold" color={colors.primary[500]}>
                   {" "}Sign in
@@ -260,6 +307,22 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     marginBottom: 16,
+  },
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+  },
+  infoIconContainer: {
+    marginRight: 10,
+  },
+  infoText: {
+    flex: 1,
+    color: colors.primary[700],
   },
   formContainer: {
     paddingHorizontal: 24,

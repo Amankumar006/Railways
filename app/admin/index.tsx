@@ -7,16 +7,17 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  useColorScheme
+  useColorScheme,
+  Image
 } from 'react-native';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
 import { Card } from '@/components/themed/Card';
 import { supabase } from '@/lib/supabase';
-import { User as UserIcon, Search, AlertCircle, Check, Trash } from 'lucide-react-native';
+import { User as UserIcon, Search, AlertCircle, Check, Trash, Users, ClipboardCheck, Settings } from 'lucide-react-native';
 import { colors, colorScheme } from '@/constants/Colors';
 import { User, UserRole } from '@/types';
-import { useRouter, useNavigation } from 'expo-router';
+import { useRouter, useNavigation, Link } from 'expo-router';
 import { Input } from '@/components/themed/Input';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
@@ -27,10 +28,12 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingApprovals, setPendingApprovals] = useState(0);
   
   const colorMode = useColorScheme() ?? 'light';
   const themeColors = colorScheme[colorMode];
   const navigation = useNavigation();
+  const router = useRouter();
   
   // Set the header title
   useEffect(() => {
@@ -39,12 +42,13 @@ export default function AdminDashboard() {
     });
   }, []);
 
-  // Fetch all users
+  // Fetch all users and count pending approvals
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
     
     try {
+      // Fetch all users
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -61,7 +65,12 @@ export default function AdminDashboard() {
         department: profile.department || undefined,
         phone: profile.phone || undefined,
         avatar: profile.avatar_url || undefined,
+        approvalStatus: profile.approval_status,
       }));
+      
+      // Count pending approvals
+      const pendingCount = data.filter(profile => profile.approval_status === 'pending').length;
+      setPendingApprovals(pendingCount);
       
       setUsers(formattedUsers);
       setFilteredUsers(formattedUsers);
@@ -169,9 +178,7 @@ export default function AdminDashboard() {
               backgroundColor: 
                 item.role === 'manager' 
                   ? colors.secondary[500] + '30'
-                  : item.role === 'supervisor'
-                    ? colors.warning[500] + '30'
-                    : colors.primary[500] + '30'
+                  : colors.primary[500] + '30' // Default to inspector color
             }
           ]}>
             <StyledText 
@@ -180,9 +187,7 @@ export default function AdminDashboard() {
               color={
                 item.role === 'manager' 
                   ? colors.secondary[500] 
-                  : item.role === 'supervisor'
-                    ? colors.warning[500]
-                    : colors.primary[500]
+                  : colors.primary[500] // Default to inspector color
               }
             >
               {item.role.toUpperCase()}
@@ -224,22 +229,7 @@ export default function AdminDashboard() {
               </StyledText>
             </TouchableOpacity>
             
-            <TouchableOpacity 
-              style={[
-                styles.roleButton,
-                item.role === 'supervisor' && styles.activeRoleButton,
-                { borderColor: colors.warning[500] }
-              ]}
-              onPress={() => item.role !== 'supervisor' && changeUserRole(item, 'supervisor')}
-              disabled={item.role === 'supervisor'}
-            >
-              <StyledText 
-                size="xs" 
-                color={item.role === 'supervisor' ? colors.white : colors.warning[500]}
-              >
-                Supervisor
-              </StyledText>
-            </TouchableOpacity>
+            {/* Removed supervisor role button */}
             
             <TouchableOpacity 
               style={[
@@ -266,6 +256,91 @@ export default function AdminDashboard() {
   // Main render
   return (
     <StyledView style={styles.container}>
+      <Animated.View 
+        style={styles.quickActionsContainer}
+        entering={FadeIn.duration(500)}
+      >
+        <StyledText size="xl" weight="bold" style={styles.sectionTitle}>
+          Admin Controls
+        </StyledText>
+        
+        <View style={styles.quickActionCards}>
+          <Link href="/admin/user-approvals" asChild>
+            <TouchableOpacity style={[styles.quickActionCard, pendingApprovals > 0 && styles.highlightedCard]}>
+              <View style={[styles.quickActionIcon, pendingApprovals > 0 && styles.highlightedIcon]}>
+                <ClipboardCheck size={24} color={pendingApprovals > 0 ? colors.white : colors.primary[500]} />
+              </View>
+              <StyledText size="md" weight="bold" style={styles.quickActionTitle}>
+                User Approvals
+              </StyledText>
+              {pendingApprovals > 0 && (
+                <View style={styles.badgeContainer}>
+                  <StyledText size="sm" weight="bold" color={colors.white}>
+                    {pendingApprovals}
+                  </StyledText>
+                </View>
+              )}
+              <StyledText size="sm" color={colors.neutral[600]} style={styles.quickActionDesc}>
+                Manage pending user registrations
+              </StyledText>
+            </TouchableOpacity>
+          </Link>
+          
+          <TouchableOpacity style={styles.quickActionCard}>
+            <View style={styles.quickActionIcon}>
+              <Users size={24} color={colors.primary[500]} />
+            </View>
+            <StyledText size="md" weight="bold" style={styles.quickActionTitle}>
+              User Management
+            </StyledText>
+            <StyledText size="sm" color={colors.neutral[600]} style={styles.quickActionDesc}>
+              Manage all system users
+            </StyledText>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickActionCard}>
+            <View style={styles.quickActionIcon}>
+              <Settings size={24} color={colors.primary[500]} />
+            </View>
+            <StyledText size="md" weight="bold" style={styles.quickActionTitle}>
+              System Settings
+            </StyledText>
+            <StyledText size="sm" color={colors.neutral[600]} style={styles.quickActionDesc}>
+              Configure application settings
+            </StyledText>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+      
+      <View style={styles.searchContainer}>
+        <Input
+          placeholder="Search users..."
+          leftIcon={<Search size={20} color={colors.neutral[500]} />}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchInput}
+        />
+      </View>
+
+      <View style={styles.summaryContainer}>
+        <StyledText size="lg" weight="bold">
+          {users.length} Users
+        </StyledText>
+        <View style={styles.roleCounts}>
+          <View style={styles.roleCount}>
+            <StyledText size="sm" weight="medium" color={colors.primary[500]}>
+              {users.filter(user => user.role === 'inspector').length} Inspectors
+            </StyledText>
+          </View>
+          {/* Removed supervisor role count */}
+          <View style={styles.roleCount}>
+            <StyledText size="sm" weight="medium" color={colors.secondary[500]}>
+              {users.filter(user => user.role === 'manager').length} Managers
+            </StyledText>
+          </View>
+        </View>
+      </View>
+
       {/* Search bar */}
       <View style={styles.searchContainer}>
         <Input
@@ -288,11 +363,7 @@ export default function AdminDashboard() {
               {users.filter(user => user.role === 'inspector').length} Inspectors
             </StyledText>
           </View>
-          <View style={styles.roleCount}>
-            <StyledText size="sm" weight="medium" color={colors.warning[500]}>
-              {users.filter(user => user.role === 'supervisor').length} Supervisors
-            </StyledText>
-          </View>
+          {/* Removed supervisor role count */}
           <View style={styles.roleCount}>
             <StyledText size="sm" weight="medium" color={colors.secondary[500]}>
               {users.filter(user => user.role === 'manager').length} Managers
@@ -347,6 +418,65 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
+  },
+  quickActionsContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    marginBottom: 16,
+  },
+  quickActionCards: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -8,
+    marginBottom: 8,
+  },
+  quickActionCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 16,
+    margin: 8,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  highlightedCard: {
+    borderWidth: 1,
+    borderColor: colors.primary[500],
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  highlightedIcon: {
+    backgroundColor: colors.primary[500],
+  },
+  quickActionTitle: {
+    marginBottom: 4,
+  },
+  quickActionDesc: {
+    marginTop: 4,
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.error[500],
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
   },
   searchContainer: {
     marginBottom: 16,

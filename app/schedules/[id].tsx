@@ -177,7 +177,8 @@ export default function ScheduleDetailScreen() {
   };
   
   // Check if user can update the status
-  const canUpdateStatus = schedule.assignedTo?.id === user?.id || user?.role === 'supervisor';
+  // Manager can always update status, inspector can only update if assigned
+  const canUpdateStatus = schedule.assignedTo?.id === user?.id || user?.role === 'manager';
   
   // Determine what actions are available based on status
   const getAvailableActions = () => {
@@ -357,21 +358,7 @@ export default function ScheduleDetailScreen() {
               </View>
             </View>
             
-            {schedule.supervisedBy && (
-              <View style={styles.detailsRow}>
-                <View style={styles.detailIcon}>
-                  <User size={20} color={colors.secondary[500]} />
-                </View>
-                <View style={styles.detailContent}>
-                  <StyledText size="sm" color={themeColors.textSecondary}>
-                    Supervised By
-                  </StyledText>
-                  <StyledText size="md">
-                    {schedule.supervisedBy.name}
-                  </StyledText>
-                </View>
-              </View>
-            )}
+            {/* Removed supervisor section as we've eliminated the supervisor role */}
           </Card>
           
           {/* Notes */}
@@ -416,7 +403,7 @@ export default function ScheduleDetailScreen() {
               </StyledText>
             </TouchableOpacity>
             
-            {(user?.role === 'supervisor' || schedule.status === 'in-progress') && (
+            {(user?.role === 'manager' || schedule.status === 'in-progress') && (
               <TouchableOpacity style={styles.secondaryAction}>
                 <FileEdit size={20} color={themeColors.text} />
                 <StyledText size="sm" style={styles.secondaryActionText}>

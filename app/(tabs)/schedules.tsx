@@ -9,6 +9,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
 import { Input } from '@/components/themed/Input';
@@ -21,7 +22,15 @@ import { colors, colorScheme } from '@/constants/Colors';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default function SchedulesScreen() {
+  const { isAuthenticated } = useAuth();
   const router = useRouter();
+  
+  // Extra security check - redirect if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.replace('/(auth)/login');
+    }
+  }, [isAuthenticated, router]);
   const colorMode = useColorScheme() ?? 'light';
   const themeColors = colorScheme[colorMode];
   

@@ -77,10 +77,10 @@ export default function ForgotPasswordScreen() {
         </StyledText>
         
         <StyledText size="md" style={styles.subtitle}>
-          Enter your email and we'll send you instructions to reset your password
+          {"Enter your email and we'll send you instructions to reset your password"}
         </StyledText>
         
-        {error && (
+        {error ? (
           <StyledView 
             style={styles.messageContainer} 
             backgroundColor={colors.error[500] + '20'}
@@ -89,9 +89,9 @@ export default function ForgotPasswordScreen() {
               {error}
             </StyledText>
           </StyledView>
-        )}
+        ) : null}
         
-        {message && (
+        {message ? (
           <StyledView 
             style={styles.messageContainer} 
             backgroundColor={colors.success[500] + '20'}
@@ -100,7 +100,7 @@ export default function ForgotPasswordScreen() {
               {message}
             </StyledText>
           </StyledView>
-        )}
+        ) : null}
         
         <Input
           label="Email"
