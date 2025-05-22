@@ -60,14 +60,28 @@ export function Button({
           ...styles.button,
           ...styles[`button-${size}`],
           backgroundColor: colors.primary[500],
-          borderColor: colors.primary[500],
+          borderColor: colors.primary[600],
+          borderWidth: 1,
+          // Add a subtle shadow for depth
+          shadowColor: colors.primary[900],
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 3,
+          elevation: 3,
         };
       case 'secondary':
         return {
           ...styles.button,
           ...styles[`button-${size}`],
           backgroundColor: colors.secondary[500],
-          borderColor: colors.secondary[500],
+          borderColor: colors.secondary[600],
+          borderWidth: 1,
+          // Add a subtle shadow for depth
+          shadowColor: colors.secondary[900],
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 3,
+          elevation: 3,
         };
       case 'outline':
         return {
@@ -180,6 +194,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 8,
+    // Add a subtle gradient effect with border
+    overflow: 'hidden',
   },
   'button-sm': {
     paddingVertical: 8,

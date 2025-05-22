@@ -17,6 +17,7 @@ import { colorScheme } from '@/constants/Colors';
 import { useColorScheme } from 'react-native';
 import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/hooks/useTheme';
 
 // Types for the new database schema
 interface InspectionSection {
@@ -54,12 +55,136 @@ export default function TripReport() {
   const { user } = useAuth();
   const colorMode = useColorScheme() ?? 'light';
   const themeColors = colorScheme[colorMode];
+  const { colors, theme } = useTheme();
+  
+  // Create styles with theme colors
+  const themedStyles = StyleSheet.create({
+    headerCard: {
+      marginBottom: 10,
+      padding: 0,
+      overflow: 'hidden',
+      borderColor: theme.indianRailways.blue + '30',
+    },
+    headerRow: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.indianRailways.blue + '20',
+    },
+    scheduleRow: {
+      padding: 8,
+      alignItems: 'center',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.indianRailways.blue + '20',
+      backgroundColor: theme.indianRailways.green + '10',
+    },
+    redText: {
+      color: theme.indianRailways.red,
+    },
+    greenText: {
+      color: theme.indianRailways.green,
+    },
+    compulsoryText: {
+      color: theme.indianRailways.red,
+      fontWeight: 'bold',
+    },
+    primaryText: {
+      color: theme.indianRailways.saffron,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 12,
+      backgroundColor: theme.indianRailways.blue + '15',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.indianRailways.blue + '30',
+    },
+    categoryHeader: {
+      padding: 8,
+      backgroundColor: theme.indianRailways.saffron + '10',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.indianRailways.saffron + '30',
+    },
+    tableHeader: {
+      flexDirection: 'row',
+      backgroundColor: theme.indianRailways.lightBlue + '20',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.indianRailways.blue + '20',
+    },
+    tableHeaderCell: {
+      padding: 8,
+      borderRightWidth: 1,
+      borderRightColor: theme.indianRailways.blue + '20',
+    },
+    tableCell: {
+      padding: 8,
+      borderRightWidth: 1,
+      borderRightColor: theme.indianRailways.blue + '15',
+    },
+    checkOption: {
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      borderRadius: 4,
+      marginBottom: 4,
+      backgroundColor: colors.neutral[100],
+    },
+    activeOptionOkay: {
+      backgroundColor: theme.indianRailways.green + '20',
+    },
+    activeOptionNotOkay: {
+      backgroundColor: theme.indianRailways.red + '20',
+    },
+    remarksInput: {
+      marginTop: 4,
+      borderWidth: 1,
+      borderColor: theme.indianRailways.blue + '30',
+      borderRadius: 4,
+      padding: 4,
+      minHeight: 60,
+    },
+    submitButton: {
+      backgroundColor: theme.indianRailways.blue,
+      paddingVertical: 12,
+      paddingHorizontal: 30,
+      borderRadius: 6,
+      minWidth: 160,
+      alignItems: 'center',
+    },
+    disabledButton: {
+      backgroundColor: colors.neutral[400],
+    },
+    reviewBanner: {
+      backgroundColor: theme.indianRailways.saffron,
+      padding: 10,
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    approveButton: {
+      backgroundColor: theme.indianRailways.green,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 5,
+      flex: 1,
+      alignItems: 'center',
+      marginRight: 10,
+    },
+    rejectButton: {
+      backgroundColor: theme.indianRailways.red,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 5,
+      flex: 1,
+      alignItems: 'center',
+      marginLeft: 10,
+    },
+  });
   
   // State variables
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [tripReportId, setTripReportId] = useState<string | null>(null);
-  const [trainNumber, setTrainNumber] = useState('22301');
+  const [trainNumber, setTrainNumber] = useState('');
+  const [trainName, setTrainName] = useState('');
   const [redOnTime, setRedOnTime] = useState('');
   const [redOffTime, setRedOffTime] = useState('');
   const [location, setLocation] = useState('');
@@ -70,15 +195,69 @@ export default function TripReport() {
     // For Expo Router, we can try to get the search parameters from the URL
     let reportId = undefined;
     let mode = undefined;
+    let trainNumberParam = undefined;
+    let trainNameParam = undefined;
     
     // Access URL parameters from location which is safer than directly accessing router properties
     try {
       const url = new URL(window.location.href);
       reportId = url.searchParams.get('id');
       mode = url.searchParams.get('mode');
-      console.log('Extracted params from URL:', { reportId, mode });
+      trainNumberParam = url.searchParams.get('trainNumber');
+      trainNameParam = url.searchParams.get('trainName');
+      console.log('Extracted params from URL:', { reportId, mode, trainNumberParam, trainNameParam });
     } catch (error) {
       console.log('Could not parse URL params, using default behavior');
+    }
+    
+    // Process train information from parameters and localStorage backup
+    try {
+      // Try to get train info from URL parameters first
+      let finalTrainNumber = trainNumberParam || '';
+      let finalTrainName = trainNameParam || '';
+      
+      // If parameters are missing, try to get from localStorage as backup
+      if (!finalTrainNumber || !finalTrainName) {
+        try {
+          const storedTrainNumber = localStorage.getItem('selectedTrainNumber');
+          const storedTrainName = localStorage.getItem('selectedTrainName');
+          
+          if (storedTrainNumber && !finalTrainNumber) {
+            console.log('Retrieved train number from localStorage:', storedTrainNumber);
+            finalTrainNumber = storedTrainNumber;
+          }
+          
+          if (storedTrainName && !finalTrainName) {
+            console.log('Retrieved train name from localStorage:', storedTrainName);
+            finalTrainName = storedTrainName;
+          }
+          
+          // Clear localStorage after retrieving to prevent stale data
+          localStorage.removeItem('selectedTrainNumber');
+          localStorage.removeItem('selectedTrainName');
+        } catch (storageError) {
+          console.log('Could not access localStorage:', storageError);
+        }
+      }
+      
+      // Set the train information in state
+      if (finalTrainNumber) {
+        console.log('Setting final train number:', finalTrainNumber);
+        setTrainNumber(finalTrainNumber);
+      }
+      
+      if (finalTrainName) {
+        console.log('Setting final train name:', finalTrainName);
+        setTrainName(finalTrainName);
+      }
+      
+      // Log the complete train info
+      console.log('Train information set:', { 
+        number: finalTrainNumber || 'Not provided', 
+        name: finalTrainName || 'Not provided' 
+      });
+    } catch (error) {
+      console.error('Error processing train parameters:', error);
     }
     
     console.log('TripReport component mounted with params:', { reportId, mode });
@@ -123,6 +302,7 @@ export default function TripReport() {
       
       setTripReportId(reportData.id);
       setTrainNumber(reportData.train_number || '');
+      setTrainName(reportData.train_name || '');
       setLocation(reportData.location || '');
       setRedOnTime(reportData.red_on_time || '');
       setRedOffTime(reportData.red_off_time || '');
@@ -196,6 +376,7 @@ export default function TripReport() {
         .from('trip_reports')
         .insert({
           train_number: trainNumber,
+          train_name: trainName,
           inspector_id: user.id,
           date: new Date().toISOString(),
           status: 'draft',
@@ -456,7 +637,9 @@ export default function TripReport() {
         <TouchableOpacity 
           style={[
             styles.checkOption, 
-            activity.checkStatus === 'checked-okay' && styles.activeOptionOkay
+            activity.checkStatus === 'checked-okay' && {
+              backgroundColor: theme.indianRailways.green + '20'
+            }
           ]}
           onPress={() => handleCheckStatusChange(
             sectionId, 
@@ -471,7 +654,9 @@ export default function TripReport() {
         <TouchableOpacity 
           style={[
             styles.checkOption, 
-            activity.checkStatus === 'checked-not-okay' && styles.activeOptionNotOkay
+            activity.checkStatus === 'checked-not-okay' && {
+              backgroundColor: theme.indianRailways.red + '20'
+            }
           ]}
           onPress={() => handleCheckStatusChange(
             sectionId, 
@@ -567,22 +752,40 @@ export default function TripReport() {
   // Complete the submission process
   const completeSubmission = async () => {
     try {
-      // Update the trip report status
+      setSubmitting(true);
+      
+      // Validate required fields before submission
+      if (!trainNumber.trim()) {
+        Alert.alert('Missing Information', 'Please enter a train number');
+        setSubmitting(false);
+        return;
+      }
+      
+      // Prepare report data with all fields
+      const reportData = {
+        status: 'submitted',
+        train_number: trainNumber.trim(),
+        train_name: trainName.trim(),
+        red_on_time: redOnTime.trim(),
+        red_off_time: redOffTime.trim(),
+        location: location.trim(),
+        submitted_at: new Date().toISOString()
+      };
+      
+      console.log('Submitting report with data:', reportData);
+      
+      // Update the trip report status to submitted
       const { error } = await supabase
         .from('trip_reports')
-        .update({
-          status: 'submitted',
-          train_number: trainNumber,
-          red_on_time: redOnTime,
-          red_off_time: redOffTime,
-          location: location,
-          submitted_at: new Date().toISOString()
-        })
+        .update(reportData)
         .eq('id', tripReportId);
         
       if (error) {
-        throw error;
+        console.error('Database error during submission:', error);
+        throw new Error(`Database error: ${error.message}`);
       }
+      
+      console.log('Report submitted successfully with ID:', tripReportId);
       
       Alert.alert(
         'Success',
@@ -591,7 +794,10 @@ export default function TripReport() {
       );
     } catch (error) {
       console.error('Error completing submission:', error);
-      Alert.alert('Error', 'Failed to submit report. Please try again.');
+      Alert.alert(
+        'Error', 
+        `Failed to submit report: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     } finally {
       setSubmitting(false);
     }
@@ -600,7 +806,7 @@ export default function TripReport() {
   if (loading) {
     return (
       <StyledView style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#3498db" />
+        <ActivityIndicator size="large" color={theme.indianRailways.blue} />
         <StyledText style={{ marginTop: 20 }}>Loading inspection checklist...</StyledText>
       </StyledView>
     );
@@ -613,10 +819,17 @@ export default function TripReport() {
         <StyledText size="lg" weight="bold" style={{ marginBottom: 20 }}>Authentication Required</StyledText>
         <StyledText style={{ marginBottom: 30, textAlign: 'center' }}>You need to be logged in to view and create trip reports.</StyledText>
         <TouchableOpacity 
-          style={styles.submitButton}
+          style={{
+            backgroundColor: theme.indianRailways.blue,
+            paddingVertical: 12,
+            paddingHorizontal: 30,
+            borderRadius: 6,
+            minWidth: 160,
+            alignItems: 'center'
+          }}
           onPress={() => router.replace('/login')}
         >
-          <StyledText size="md" weight="bold" style={styles.buttonText}>Go to Login</StyledText>
+          <StyledText size="md" weight="bold" style={{ color: '#fff' }}>Go to Login</StyledText>
         </TouchableOpacity>
       </StyledView>
     );
@@ -625,7 +838,12 @@ export default function TripReport() {
   return (
     <StyledView style={styles.container}>
       {user?.role === 'manager' && (
-        <View style={styles.reviewBanner}>
+        <View style={{
+          backgroundColor: theme.indianRailways.saffron,
+          padding: 10,
+          alignItems: 'center',
+          marginBottom: 10,
+        }}>
           <StyledText size="md" weight="bold" style={{ color: '#fff' }}>
             Manager Review Mode
           </StyledText>
@@ -633,8 +851,17 @@ export default function TripReport() {
       )}
       <ScrollView>
         {/* Header Section */}
-        <Card style={styles.headerCard}>
-          <View style={styles.headerRow}>
+        <Card style={{
+          marginBottom: 10,
+          padding: 0,
+          overflow: 'hidden',
+          borderColor: theme.indianRailways.blue + '30',
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: theme.indianRailways.blue + '20',
+          }}>
             <View style={[styles.headerCell, styles.headerLabelCell]}>
               <StyledText size="sm" weight="bold">Date:</StyledText>
             </View>
@@ -643,7 +870,11 @@ export default function TripReport() {
             </View>
           </View>
           
-          <View style={styles.headerRow}>
+          <View style={{
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: theme.indianRailways.blue + '20',
+          }}>
             <View style={[styles.headerCell, { borderLeftWidth: 1 }]}>
               <StyledText size="sm" weight="bold">Train No:</StyledText>
             </View>
@@ -652,11 +883,34 @@ export default function TripReport() {
                 style={styles.trainInput}
                 value={trainNumber}
                 onChangeText={setTrainNumber}
+                placeholder="Enter train number"
               />
             </View>
           </View>
           
-          <View style={styles.headerRow}>
+          <View style={{
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: theme.indianRailways.blue + '20',
+          }}>
+            <View style={[styles.headerCell, { borderLeftWidth: 1 }]}>
+              <StyledText size="sm" weight="bold">Train Name:</StyledText>
+            </View>
+            <View style={[styles.headerCell, { flex: 1 }]}>
+              <TextInput
+                style={styles.trainInput}
+                value={trainName}
+                onChangeText={setTrainName}
+                placeholder="Enter train name"
+              />
+            </View>
+          </View>
+          
+          <View style={{
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: theme.indianRailways.blue + '20',
+          }}>
             <View style={[styles.headerCell, { borderLeftWidth: 1 }]}>
               <StyledText size="sm" weight="bold">RED On:</StyledText>
             </View>
@@ -681,7 +935,11 @@ export default function TripReport() {
             </View>
           </View>
           
-          <View style={styles.headerRow}>
+          <View style={{
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: theme.indianRailways.blue + '20',
+          }}>
             <View style={[styles.headerCell, { borderLeftWidth: 1 }]}>
               <StyledText size="sm" weight="bold">Location:</StyledText>
             </View>
@@ -702,7 +960,15 @@ export default function TripReport() {
             {/* Section Header */}
             <TouchableOpacity 
               onPress={() => toggleSection(section.id)}
-              style={styles.sectionHeader}
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: 12,
+                backgroundColor: theme.indianRailways.blue + '15',
+                borderBottomWidth: 1,
+                borderBottomColor: theme.indianRailways.blue + '30',
+              }}
             >
               <StyledText size="md" weight="bold">{section.section_number}. {section.name}</StyledText>
               {section.expanded ? (
@@ -718,14 +984,24 @@ export default function TripReport() {
                 {section.categories.map((category) => (
                   <View key={category.id}>
                     {/* Category Header */}
-                    <View style={styles.categoryHeader}>
+                    <View style={{
+                      padding: 8,
+                      backgroundColor: theme.indianRailways.saffron + '10',
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.indianRailways.saffron + '30',
+                    }}>
                       <StyledText size="sm" weight="bold">
                         {category.category_number} {category.name} ({category.applicable_coaches.join(', ')})
                       </StyledText>
                     </View>
                     
                     {/* Table Header */}
-                    <View style={styles.tableHeader}>
+                    <View style={{
+                      flexDirection: 'row',
+                      backgroundColor: theme.indianRailways.lightBlue + '20',
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.indianRailways.blue + '20',
+                    }}>
                       <View style={[styles.tableHeaderCell, { width: 40 }]}>
                         <StyledText size="sm" weight="bold">No.</StyledText>
                       </View>
@@ -754,7 +1030,14 @@ export default function TripReport() {
                         </View>
                         <View style={[styles.tableCell, { flex: 1 }]}>
                           <TextInput
-                            style={styles.remarksInput}
+                            style={{
+                              marginTop: 4,
+                              borderWidth: 1,
+                              borderColor: theme.indianRailways.blue + '30',
+                              borderRadius: 4,
+                              padding: 4,
+                              minHeight: 60,
+                            }}
                             placeholder="Add remarks"
                             value={activity.remarks || ''}
                             onChangeText={(text) => handleRemarksChange(section.id, category.id, activity.id, text)}
@@ -774,7 +1057,14 @@ export default function TripReport() {
         <View style={styles.buttonContainer}>
           {user?.role === 'inspector' ? (
             <TouchableOpacity 
-              style={[styles.submitButton, submitting && styles.disabledButton]}
+              style={{
+                backgroundColor: submitting ? colors.neutral[400] : theme.indianRailways.blue,
+                paddingVertical: 12,
+                paddingHorizontal: 30,
+                borderRadius: 6,
+                minWidth: 160,
+                alignItems: 'center'
+              }}
               onPress={handleSubmitReport}
               disabled={submitting}
             >
@@ -787,7 +1077,15 @@ export default function TripReport() {
           ) : user?.role === 'manager' && (
             <View style={styles.managerActions}>
               <TouchableOpacity 
-                style={[styles.approveButton]}
+                style={{
+                  backgroundColor: theme.indianRailways.green,
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 5,
+                  flex: 1,
+                  alignItems: 'center',
+                  marginRight: 10,
+                }}
                 onPress={() => {
                   Alert.alert(
                     'Approve Report',
@@ -828,7 +1126,15 @@ export default function TripReport() {
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.rejectButton]}
+                style={{
+                  backgroundColor: theme.indianRailways.red,
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 5,
+                  flex: 1,
+                  alignItems: 'center',
+                  marginLeft: 10,
+                }}
                 onPress={() => {
                   Alert.alert(
                     'Reject Report',
@@ -885,16 +1191,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerCard: {
-    marginBottom: 10,
-    padding: 0,
-    overflow: 'hidden',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
   headerLabelCell: {
     width: 60,
   },
@@ -909,28 +1205,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#ddd',
   },
-  scheduleRow: {
-    padding: 8,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    backgroundColor: '#f0f8f0',
-  },
   trainInfoRow: {
     flexDirection: 'row',
-  },
-  redText: {
-    color: 'red',
-  },
-  greenText: {
-    color: 'green',
-  },
-  compulsoryText: {
-    color: '#d9534f',
-    fontWeight: 'bold',
-  },
-  primaryText: {
-    color: '#ff6347', // Tomato color for Primary Maintenance
   },
   timeInput: {
     height: 30,
@@ -948,41 +1224,10 @@ const styles = StyleSheet.create({
     padding: 0,
     overflow: 'hidden',
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#f5f5f5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  categoryHeader: {
-    padding: 8,
-    backgroundColor: '#eaeaea',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f0f0f0',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  tableHeaderCell: {
-    padding: 8,
-    borderRightWidth: 1,
-    borderRightColor: '#ddd',
-  },
   activityRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#ddd',
-  },
-  tableCell: {
-    padding: 8,
-    borderRightWidth: 1,
-    borderRightColor: '#ddd',
   },
   checkOptionsContainer: {
     flexDirection: 'column',
@@ -994,65 +1239,26 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     backgroundColor: '#f5f5f5',
   },
-  activeOptionOkay: {
-    backgroundColor: '#d4edda',
+  tableHeaderCell: {
+    padding: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#ddd',
   },
-  activeOptionNotOkay: {
-    backgroundColor: '#f8d7da',
-  },
-  remarksInput: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
-    padding: 4,
-    minHeight: 60,
+  tableCell: {
+    padding: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#ddd',
   },
   buttonContainer: {
     marginVertical: 20,
     alignItems: 'center',
   },
-  submitButton: {
-    backgroundColor: '#3498db',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 6,
-    minWidth: 160,
-    alignItems: 'center',
-  },
-  disabledButton: {
-    backgroundColor: '#95a5a6',
-  },
   buttonText: {
     color: '#fff',
-  },
-  reviewBanner: {
-    backgroundColor: '#f39c12',
-    padding: 10,
-    alignItems: 'center',
-    marginBottom: 10,
   },
   managerActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 20,
-  },
-  approveButton: {
-    backgroundColor: '#2ecc71',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-    flex: 1,
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  rejectButton: {
-    backgroundColor: '#e74c3c',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-    flex: 1,
-    alignItems: 'center',
-    marginLeft: 10,
   },
 });

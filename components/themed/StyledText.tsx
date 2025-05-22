@@ -1,7 +1,7 @@
 import { Text, TextProps, StyleSheet, useColorScheme, StyleProp, TextStyle } from 'react-native';
 import { colorScheme } from '@/constants/Colors';
 
-export type FontWeight = 'regular' | 'medium' | 'bold';
+export type FontWeight = 'regular' | 'medium' | 'semibold' | 'bold' | 'extrabold';
 export type FontSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
 
 interface StyledTextProps extends TextProps {
@@ -9,12 +9,20 @@ interface StyledTextProps extends TextProps {
   size?: FontSize;
   color?: string;
   style?: StyleProp<TextStyle>;
+  align?: 'auto' | 'left' | 'right' | 'center' | 'justify';
+  transform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+  letterSpacing?: number;
+  lineHeight?: number;
 }
 
 export function StyledText({ 
   weight = 'regular', 
   size = 'md', 
   color,
+  align,
+  transform = 'none',
+  letterSpacing,
+  lineHeight,
   style, 
   ...otherProps 
 }: StyledTextProps) {
@@ -28,6 +36,10 @@ export function StyledText({
         styles[weight],
         styles[size],
         { color: color || colors.text },
+        align && { textAlign: align },
+        transform !== 'none' && { textTransform: transform },
+        letterSpacing !== undefined && { letterSpacing },
+        lineHeight !== undefined && { lineHeight },
         style,
       ]}
       {...otherProps}
@@ -47,9 +59,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     fontWeight: '500',
   },
+  semibold: {
+    fontFamily: 'Inter-SemiBold',
+    fontWeight: '600',
+  },
   bold: {
     fontFamily: 'Inter-Bold',
     fontWeight: 'bold',
+  },
+  extrabold: {
+    fontFamily: 'Inter-ExtraBold',
+    fontWeight: '800',
   },
   xs: {
     fontSize: 12,

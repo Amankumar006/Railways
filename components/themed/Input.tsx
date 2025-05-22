@@ -41,7 +41,13 @@ export function Input({
   const getBorderColor = () => {
     if (errorMessage) return colors.error[500];
     if (isFocused) return colors.primary[500];
-    return themeColors.border;
+    return colors.neutral[300];
+  };
+
+  const getBackgroundColor = () => {
+    if (errorMessage) return colors.error[50];
+    if (isFocused) return colors.primary[50];
+    return theme === 'dark' ? colors.neutral[800] : colors.white;
   };
 
   return (
@@ -57,7 +63,7 @@ export function Input({
           styles.inputContainer,
           {
             borderColor: getBorderColor(),
-            backgroundColor: theme === 'dark' ? colors.neutral[800] : colors.white,
+            backgroundColor: getBackgroundColor(),
           },
           isFocused && styles.focused,
         ]}

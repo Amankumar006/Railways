@@ -1,13 +1,17 @@
 import React from 'react';
 import { StyleSheet, ViewProps, TouchableOpacity, useColorScheme } from 'react-native';
 import { StyledView } from './StyledView';
-import { colorScheme } from '@/constants/Colors';
+import { colorScheme, colors } from '@/constants/Colors';
 
 interface CardProps extends ViewProps {
   onPress?: () => void;
   elevation?: 'none' | 'sm' | 'md' | 'lg';
   radius?: 'none' | 'sm' | 'md' | 'lg' | 'full';
-  variant?: 'filled' | 'outlined';
+  variant?: 'filled' | 'outlined' | 'accent' | 'secondary' | 'success' | 'warning' | 'error';
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+  borderLeft?: boolean;
+  borderLeftColor?: string;
+  borderLeftWidth?: number;
 }
 
 export function Card({ 
@@ -17,19 +21,66 @@ export function Card({
   elevation = 'sm',
   radius = 'md',
   variant = 'filled',
+  padding = 'md',
+  borderLeft = false,
+  borderLeftColor,
+  borderLeftWidth = 4,
   ...otherProps 
 }: CardProps) {
   const theme = useColorScheme() ?? 'light';
-  const colors = colorScheme[theme];
+  const themeColors = colorScheme[theme];
+
+  // Get background color based on variant
+  const getBackgroundColor = () => {
+    if (variant === 'outlined') return 'transparent';
+    
+    switch (variant) {
+      case 'accent':
+        return colors.primary[50];
+      case 'secondary':
+        return colors.secondary[50];
+      case 'success':
+        return colors.success[50];
+      case 'warning':
+        return colors.warning[50];
+      case 'error':
+        return colors.error[50];
+      default:
+        return themeColors.card;
+    }
+  };
+
+  // Get border color based on variant
+  const getBorderColor = () => {
+    switch (variant) {
+      case 'accent':
+        return colors.primary[500];
+      case 'secondary':
+        return colors.secondary[500];
+      case 'success':
+        return colors.success[500];
+      case 'warning':
+        return colors.warning[500];
+      case 'error':
+        return colors.error[500];
+      default:
+        return themeColors.border;
+    }
+  };
 
   const cardStyles = [
     styles.card,
+    padding !== 'none' && styles[`padding-${padding}`],
     radius !== 'none' && styles[`radius-${radius}`],
     elevation !== 'none' && styles[`elevation-${elevation}-${theme}`],
     variant === 'outlined' && {
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: getBorderColor(),
       backgroundColor: 'transparent',
+    },
+    borderLeft && {
+      borderLeftWidth: borderLeftWidth,
+      borderLeftColor: borderLeftColor || getBorderColor(),
     },
     style,
   ];
@@ -48,7 +99,7 @@ export function Card({
   }
 
   return (
-    <StyledView style={cardStyles} backgroundColor={colors.card} {...otherProps}>
+    <StyledView style={cardStyles} backgroundColor={getBackgroundColor()} {...otherProps}>
       {React.Children.map(children, child => {
         // Filter out text nodes that are just whitespace or periods
         if (typeof child === 'string' && (child.trim() === '' || child === '.')) {
@@ -62,8 +113,19 @@ export function Card({
 
 const styles = StyleSheet.create({
   card: {
-    padding: 16,
     overflow: 'hidden',
+  },
+  'padding-none': {
+    padding: 0,
+  },
+  'padding-sm': {
+    padding: 8,
+  },
+  'padding-md': {
+    padding: 16,
+  },
+  'padding-lg': {
+    padding: 24,
   },
   'radius-sm': {
     borderRadius: 4,

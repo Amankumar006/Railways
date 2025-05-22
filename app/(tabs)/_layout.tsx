@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { useColorScheme } from 'react-native';
 import { colorScheme } from '@/constants/Colors';
-import { Chrome as Home, Calendar, Bell, User } from 'lucide-react-native';
+import { Chrome as Home, Bell, User } from 'lucide-react-native';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 
 export default function TabLayout() {
@@ -39,15 +39,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="schedules"
-        options={{
-          title: 'Schedules',
-          tabBarIcon: ({ color, size }) => (
-            <Calendar size={size} color={color} />
-          ),
-        }}
-      />
+
       <Tabs.Screen
         name="notifications"
         options={{

@@ -80,13 +80,16 @@ export default function LoginScreen() {
           entering={FadeInDown.duration(800).delay(200)}
         >
           <Image 
-            source={{ uri: 'https://images.pexels.com/photos/7245887/pexels-photo-7245887.jpeg' }} 
+            source={require('@/assets/images/indian-railway-bg.png')} 
             style={styles.backgroundImage}
-            blurRadius={2}
+            blurRadius={1}
           />
           <StyledView style={styles.logoOverlay} backgroundColor="transparent">
             <StyledText size="4xl" weight="bold" color={colors.white} style={styles.logoText}>
               Coach Inspection
+            </StyledText>
+            <StyledText size="lg" weight="medium" color={colors.white} style={styles.logoSubText}>
+              भारतीय रेल
             </StyledText>
           </StyledView>
         </Animated.View>
@@ -95,11 +98,11 @@ export default function LoginScreen() {
           style={styles.formContainer}
           entering={FadeInUp.duration(800).delay(400)}
         >
-          <StyledText size="2xl" weight="bold" style={styles.title}>
+          <StyledText size="2xl" weight="bold" style={styles.title} color={colors.primary[700]}>
             Welcome Back
           </StyledText>
           
-          <StyledText size="md" style={styles.subtitle}>
+          <StyledText size="md" style={styles.subtitle} color={colors.neutral[600]}>
             Sign in to your account to continue with coach inspections
           </StyledText>
 
@@ -197,22 +200,30 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.white,
   },
   scrollContent: {
     flexGrow: 1,
   },
   logoContainer: {
-    height: 260,
+    height: 280,
     position: 'relative',
   },
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,
+    height: 280,
   },
   logoOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    marginBottom: 16,
+    tintColor: colors.white,
   },
   logoText: {
     // Using the deprecated properties with a comment to explain why
@@ -222,6 +233,12 @@ const styles = StyleSheet.create({
     textShadowRadius: 5,
     // Note: The proper way would be to use textShadow: '1px 1px 5px rgba(0, 0, 0, 0.75)',
     // but this isn't supported in the TypeScript types yet
+  },
+  logoSubText: {
+    marginTop: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 5,
   },
   formContainer: {
     paddingHorizontal: 24,

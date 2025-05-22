@@ -1,0 +1,6 @@
+Please replace this file with the following images:
+
+1. indian-railway-bg.jpg - A high-quality background image of Indian Railways trains or coaches
+2. ir-logo.png - The official Indian Railways logo (preferably with transparent background)
+
+These images will be used throughout the application for the Indian Railway theme.

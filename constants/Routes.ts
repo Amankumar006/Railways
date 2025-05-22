@@ -7,11 +7,10 @@ export const ROUTES = {
   },
   TABS: {
     DASHBOARD: "dashboard",
-    SCHEDULES: "schedules",
     NOTIFICATIONS: "notifications",
     PROFILE: "profile",
   },
-  SCHEDULES: {
+  TRIPS: {
     DETAIL: "detail",
     CREATE: "create",
     EDIT: "edit",

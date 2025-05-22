@@ -148,35 +148,53 @@ export default function SignupScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Animated.View 
-          style={styles.headerContainer}
+          style={styles.headerImageContainer}
           entering={FadeInDown.duration(800).delay(200)}
         >
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <StyledText size="md" color={colors.primary[500]}>
-              Back
+          <Image 
+            source={require('@/assets/images/indian-railway-bg.png')} 
+            style={styles.backgroundImage}
+            blurRadius={1}
+          />
+          <StyledView style={styles.logoOverlay} backgroundColor="transparent">
+            <StyledText size="3xl" weight="bold" color={colors.white} style={styles.logoText}>
+              Create Account
             </StyledText>
-          </TouchableOpacity>
-          
-          <StyledText size="2xl" weight="bold" style={styles.title}>
-            Create Account
+            <StyledText size="md" weight="medium" color={colors.white} style={styles.logoSubText}>
+              भारतीय रेल - Indian Railways
+            </StyledText>
+          </StyledView>
+        </Animated.View>
+
+        <Animated.View 
+          style={styles.headerContainer}
+          entering={FadeInDown.duration(800).delay(300)}
+        >
+          <Link href="/(auth)/login" asChild>
+            <TouchableOpacity style={styles.backButton}>
+              <StyledText size="md" color={colors.primary[600]}>
+                ← Back to Login
+              </StyledText>
+            </TouchableOpacity>
+          </Link>
+
+          <StyledText size="xl" weight="bold" style={styles.title} color={colors.primary[700]}>
+            Join Indian Railways
           </StyledText>
           
-          <StyledText size="md" style={styles.subtitle}>
-            Sign up to get started with coach inspections
+          <StyledText size="md" style={styles.subtitle} color={colors.neutral[600]}>
+            Sign up to start inspecting coaches
           </StyledText>
-          
+
           <StyledView 
-            style={styles.infoContainer} 
-            backgroundColor={colors.primary[50]}
+            style={[styles.infoContainer, { borderColor: colors.secondary[300] }]} 
+            backgroundColor={colors.secondary[50]}
           >
             <View style={styles.infoIconContainer}>
-              <Info size={18} color={colors.primary[500]} />
+              <Info size={20} color={colors.secondary[500]} />
             </View>
-            <StyledText size="sm" style={styles.infoText}>
-              New accounts require manager approval before access is granted
+            <StyledText size="sm" style={styles.infoText} color={colors.secondary[700]}>
+              After signing up, your account will require approval from a manager before you can use the app.
             </StyledText>
           </StyledView>
         </Animated.View>
@@ -289,14 +307,46 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.white,
   },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: 40,
   },
+  headerImageContainer: {
+    height: 220,
+    position: 'relative',
+  },
+  backgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    height: 220,
+  },
+  logoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 60,
+    height: 60,
+    marginBottom: 12,
+    tintColor: colors.white,
+  },
+  logoText: {
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 5,
+  },
+  logoSubText: {
+    marginTop: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 5,
+  },
   headerContainer: {
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 10,
   },
   backButton: {
@@ -315,14 +365,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 20,
     borderLeftWidth: 4,
-    borderLeftColor: colors.primary[500],
+    borderLeftColor: colors.secondary[500],
+    borderWidth: 1,
+    borderColor: colors.secondary[200],
   },
   infoIconContainer: {
     marginRight: 10,
   },
   infoText: {
     flex: 1,
-    color: colors.primary[700],
   },
   formContainer: {
     paddingHorizontal: 24,

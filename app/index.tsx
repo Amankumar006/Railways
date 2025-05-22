@@ -1,8 +1,9 @@
 import { Redirect } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
-import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
-import { colorScheme, colors } from '../constants/Colors';
-import { useColorScheme } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Image } from 'react-native';
+import { useTheme } from '../hooks/useTheme';
+import { StyledText, StyledView } from '../components/themed';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 /**
  * Root index component that handles authentication state and redirects accordingly
@@ -10,30 +11,77 @@ import { useColorScheme } from 'react-native';
  */
 export default function Index() {
   const { isAuthenticated, loading, error } = useAuth();
-  const colorMode = useColorScheme() ?? 'light';
-  const themeColors = colorScheme[colorMode];
+  const { colors, theme } = useTheme();
   
-  // During loading, show a spinner
+  // During loading, show a branded loading screen
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary[500]} />
-      </View>
+      <StyledView style={styles.container} backgroundColor={theme.indianRailways.blue}>
+        <Animated.View entering={FadeIn.duration(800)} style={styles.logoContainer}>
+          <Image 
+            source={require('../assets/images/ir-logo.png')} 
+            style={styles.logo}
+          />
+          <StyledText 
+            size="2xl" 
+            weight="bold" 
+            color={colors.white} 
+            style={styles.appTitle}
+          >
+            Coach Inspection
+          </StyledText>
+          <StyledText 
+            size="md" 
+            weight="medium" 
+            color={colors.white} 
+            style={styles.appSubtitle}
+          >
+            भारतीय रेल
+          </StyledText>
+          <ActivityIndicator 
+            size="large" 
+            color={colors.white} 
+            style={styles.spinner} 
+          />
+        </Animated.View>
+      </StyledView>
     );
   }
 
   // If there's an authentication error, display it
   if (error) {
     return (
-      <View style={[styles.container, { backgroundColor: themeColors.background, padding: 20 }]}>
-        <Text style={{ color: colors.error[500], fontSize: 16, marginBottom: 10, textAlign: 'center' }}>
+      <StyledView style={styles.container} padding="lg">
+        <Image 
+          source={require('../assets/images/ir-logo.png')} 
+          style={[styles.logo, { tintColor: theme.indianRailways.red, opacity: 0.8 }]}
+        />
+        <StyledText 
+          size="lg" 
+          weight="bold" 
+          color={theme.indianRailways.red} 
+          style={styles.errorTitle}
+        >
+          Authentication Error
+        </StyledText>
+        <StyledText 
+          size="md" 
+          color={colors.error[500]}
+          style={styles.errorMessage}
+          align="center"
+        >
           {error}
-        </Text>
-        <Text style={{ color: themeColors.text, fontSize: 14, marginBottom: 20, textAlign: 'center' }}>
-          Please try again later or contact support.
-        </Text>
+        </StyledText>
+        <StyledText 
+          size="sm" 
+          color={colors.textSecondary}
+          style={styles.errorHelp}
+          align="center"
+        >
+          Please try again later or contact Indian Railways support.
+        </StyledText>
         <Redirect href="/(auth)/login" />
-      </View>
+      </StyledView>
     );
   }
   
@@ -46,5 +94,41 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    marginBottom: 16,
+    tintColor: 'white',
+  },
+  appTitle: {
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  appSubtitle: {
+    marginTop: 8,
+    opacity: 0.9,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  spinner: {
+    marginTop: 32,
+  },
+  errorTitle: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorMessage: {
+    marginBottom: 16,
+    maxWidth: 300,
+  },
+  errorHelp: {
+    maxWidth: 300,
   },
 });

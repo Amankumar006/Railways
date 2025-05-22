@@ -176,10 +176,8 @@ export default function NotificationsScreen() {
     // Handle different notification types
     switch (notification.type) {
       case 'schedule':
-        // Navigate to schedule details
-        if (notification.relatedId) {
-          router.push(`/schedules/${notification.relatedId}`);
-        }
+        // Navigate to trips page instead of schedules
+        router.push('/trips');
         break;
       // Add other notification type handlers as needed
     }

@@ -111,53 +111,23 @@ export const db = {
     },
   },
   
-  // Schedules
-  schedules: {
+  // Trips functionality (replacing schedules)
+  trips: {
+    // Add trip-related functions here when needed
     getAll: async () => {
       const { data, error } = await supabase
-        .from('schedules')
-        .select(`
-          *,
-          coach:coaches(*),
-          assigned_to:profiles!assigned_to_id(*),
-          supervised_by:profiles!supervised_by_id(*)
-        `)
-        .order('scheduled_date', { ascending: true });
+        .from('trip_reports')
+        .select('*')
+        .order('created_at', { ascending: false });
       
       if (error) throw error;
       return data;
     },
     getById: async (id: string) => {
       const { data, error } = await supabase
-        .from('schedules')
-        .select(`
-          *,
-          coach:coaches(*),
-          assigned_to:profiles!assigned_to_id(*),
-          supervised_by:profiles!supervised_by_id(*)
-        `)
+        .from('trip_reports')
+        .select('*')
         .eq('id', id)
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    create: async (schedule: Database['public']['Tables']['schedules']['Insert']) => {
-      const { data, error } = await supabase
-        .from('schedules')
-        .insert(schedule)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    update: async (id: string, updates: Partial<Database['public']['Tables']['schedules']['Update']>) => {
-      const { data, error } = await supabase
-        .from('schedules')
-        .update(updates)
-        .eq('id', id)
-        .select()
         .single();
       
       if (error) throw error;
@@ -190,7 +160,7 @@ export const db = {
   
   // Real-time subscriptions - WITH PLATFORM CHECK
   subscriptions: {
-    schedules: (callback: (payload: any) => void) => {
+    trips: (callback: (payload: any) => void) => {
       // Skip subscriptions on Android
       if (Platform.OS === 'android') {
         console.log('Real-time subscriptions are not supported on Android');
@@ -201,13 +171,13 @@ export const db = {
       
       // Normal subscription for other platforms
       return supabase
-        .channel('schedules')
+        .channel('trips')
         .on(
           'postgres_changes',
           {
             event: '*',
             schema: 'public',
-            table: 'schedules',
+            table: 'trip_reports',
           },
           callback
         )
