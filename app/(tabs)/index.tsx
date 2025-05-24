@@ -25,7 +25,7 @@ import {
   Eye,
   Download
 } from 'lucide-react-native';
-import { generateTripReport, sharePDF } from '@/utils/pdfGenerator';
+import { generateTripReport } from '@/utils/pdfGenerator';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function DashboardScreen() {
@@ -70,38 +70,49 @@ export default function DashboardScreen() {
               id: 'mock-draft',
               train_number: '22222',
               train_name: 'Duronto Express',
-              departure_station: 'Chennai',
-              arrival_station: 'Kolkata',
-              inspection_date: new Date().toISOString(),
+              location: 'Chennai',
+              date: new Date().toISOString(),
               status: 'draft',
               created_at: new Date().toISOString(),
-              coach_count: 2,
-              issues_count: 1,
-              progress: 60
+              inspector_id: user?.id,
+              stats: {
+                total_activities: 20,
+                checked_okay: 12,
+                checked_not_okay: 1,
+                unchecked: 7
+              }
             },
             {
               id: 'mock-1',
               train_number: '12345',
               train_name: 'Rajdhani Express',
-              departure_station: 'New Delhi',
-              arrival_station: 'Mumbai Central',
-              inspection_date: new Date().toISOString(),
+              location: 'New Delhi',
+              date: new Date().toISOString(),
               status: 'submitted',
               created_at: new Date().toISOString(),
-              coach_count: 3,
-              issues_count: 2
+              inspector_id: user?.id,
+              stats: {
+                total_activities: 20,
+                checked_okay: 18,
+                checked_not_okay: 2,
+                unchecked: 0
+              }
             },
             {
               id: 'mock-2',
               train_number: '54321',
               train_name: 'Shatabdi Express',
-              departure_station: 'Howrah',
-              arrival_station: 'New Delhi',
-              inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+              location: 'Howrah',
+              date: new Date(Date.now() - 86400000).toISOString(),
               status: 'approved',
               created_at: new Date(Date.now() - 86400000).toISOString(),
-              coach_count: 5,
-              issues_count: 0
+              inspector_id: user?.id,
+              stats: {
+                total_activities: 20,
+                checked_okay: 20,
+                checked_not_okay: 0,
+                unchecked: 0
+              }
             }
           ];
           setTripReports(mockReports);
@@ -140,25 +151,33 @@ export default function DashboardScreen() {
                 id: 'mock-1',
                 train_number: '12345',
                 train_name: 'Rajdhani Express',
-                departure_station: 'New Delhi',
-                arrival_station: 'Mumbai Central',
-                inspection_date: new Date().toISOString(),
+                location: 'New Delhi',
+                date: new Date().toISOString(),
                 status: 'submitted',
                 created_at: new Date().toISOString(),
-                coach_count: 3,
-                issues_count: 2
+                inspector_id: user?.id,
+                stats: {
+                  total_activities: 20,
+                  checked_okay: 18,
+                  checked_not_okay: 2,
+                  unchecked: 0
+                }
               },
               {
                 id: 'mock-2',
                 train_number: '54321',
                 train_name: 'Shatabdi Express',
-                departure_station: 'Howrah',
-                arrival_station: 'New Delhi',
-                inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+                location: 'Howrah',
+                date: new Date(Date.now() - 86400000).toISOString(),
                 status: 'approved',
                 created_at: new Date(Date.now() - 86400000).toISOString(),
-                coach_count: 5,
-                issues_count: 0
+                inspector_id: user?.id,
+                stats: {
+                  total_activities: 20,
+                  checked_okay: 20,
+                  checked_not_okay: 0,
+                  unchecked: 0
+                }
               }
             ];
             setTripReports(mockReports);
@@ -172,38 +191,49 @@ export default function DashboardScreen() {
             id: 'mock-draft',
             train_number: '22222',
             train_name: 'Duronto Express',
-            departure_station: 'Chennai',
-            arrival_station: 'Kolkata',
-            inspection_date: new Date().toISOString(),
+            location: 'Chennai',
+            date: new Date().toISOString(),
             status: 'draft',
             created_at: new Date().toISOString(),
-            coach_count: 2,
-            issues_count: 1,
-            progress: 60
+            inspector_id: user?.id,
+            stats: {
+              total_activities: 20,
+              checked_okay: 12,
+              checked_not_okay: 1,
+              unchecked: 7
+            }
           },
           {
             id: 'mock-1',
             train_number: '12345',
             train_name: 'Rajdhani Express',
-            departure_station: 'New Delhi',
-            arrival_station: 'Mumbai Central',
-            inspection_date: new Date().toISOString(),
+            location: 'New Delhi',
+            date: new Date().toISOString(),
             status: 'submitted',
             created_at: new Date().toISOString(),
-            coach_count: 3,
-            issues_count: 2
+            inspector_id: user?.id,
+            stats: {
+              total_activities: 20,
+              checked_okay: 18,
+              checked_not_okay: 2,
+              unchecked: 0
+            }
           },
           {
             id: 'mock-2',
             train_number: '54321',
             train_name: 'Shatabdi Express',
-            departure_station: 'Howrah',
-            arrival_station: 'New Delhi',
-            inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+            location: 'Howrah',
+            date: new Date(Date.now() - 86400000).toISOString(),
             status: 'approved',
             created_at: new Date(Date.now() - 86400000).toISOString(),
-            coach_count: 5,
-            issues_count: 0
+            inspector_id: user?.id,
+            stats: {
+              total_activities: 20,
+              checked_okay: 20,
+              checked_not_okay: 0,
+              unchecked: 0
+            }
           }
         ];
         setTripReports(mockReports);
@@ -234,7 +264,7 @@ export default function DashboardScreen() {
   
   // Handler for viewing a report
   const handleViewReport = (reportId: string) => {
-    router.push(`/trips?id=${reportId}`);
+    router.push(`/trips?tripId=${reportId}`);
   };
   
   // Handler for downloading a report as PDF
@@ -243,9 +273,8 @@ export default function DashboardScreen() {
       // Show loading indicator or toast message
       alert('Generating PDF report...');
       
-      // Generate and share the HTML report
-      const filePath = await generateTripReport(reportId);
-      await sharePDF(filePath);
+      // Generate and share the PDF report
+      await generateTripReport(reportId);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF report. Please try again.');
@@ -414,38 +443,49 @@ function renderInspectorDashboard() {
               id: 'mock-draft',
               train_number: '22222',
               train_name: 'Duronto Express',
-              departure_station: 'Chennai',
-              arrival_station: 'Kolkata',
-              inspection_date: new Date().toISOString(),
+              location: 'Chennai',
+              date: new Date().toISOString(),
               status: 'draft',
               created_at: new Date().toISOString(),
-              coach_count: 2,
-              issues_count: 1,
-              progress: 60
+              inspector_id: user?.id,
+              stats: {
+                total_activities: 20,
+                checked_okay: 12,
+                checked_not_okay: 1,
+                unchecked: 7
+              }
             },
             {
               id: 'mock-1',
               train_number: '12345',
               train_name: 'Rajdhani Express',
-              departure_station: 'New Delhi',
-              arrival_station: 'Mumbai Central',
-              inspection_date: new Date().toISOString(),
+              location: 'New Delhi',
+              date: new Date().toISOString(),
               status: 'submitted',
               created_at: new Date().toISOString(),
-              coach_count: 3,
-              issues_count: 2
+              inspector_id: user?.id,
+              stats: {
+                total_activities: 20,
+                checked_okay: 18,
+                checked_not_okay: 2,
+                unchecked: 0
+              }
             },
             {
               id: 'mock-2',
               train_number: '54321',
               train_name: 'Shatabdi Express',
-              departure_station: 'Howrah',
-              arrival_station: 'New Delhi',
-              inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+              location: 'Howrah',
+              date: new Date(Date.now() - 86400000).toISOString(),
               status: 'approved',
               created_at: new Date(Date.now() - 86400000).toISOString(),
-              coach_count: 5,
-              issues_count: 0
+              inspector_id: user?.id,
+              stats: {
+                total_activities: 20,
+                checked_okay: 20,
+                checked_not_okay: 0,
+                unchecked: 0
+              }
             }
           ];
           setTripReports(mockReports);
@@ -472,25 +512,33 @@ function renderInspectorDashboard() {
                 id: 'mock-1',
                 train_number: '12345',
                 train_name: 'Rajdhani Express',
-                departure_station: 'New Delhi',
-                arrival_station: 'Mumbai Central',
-                inspection_date: new Date().toISOString(),
+                location: 'New Delhi',
+                date: new Date().toISOString(),
                 status: 'submitted',
                 created_at: new Date().toISOString(),
-                coach_count: 3,
-                issues_count: 2
+                inspector_id: user?.id,
+                stats: {
+                  total_activities: 20,
+                  checked_okay: 18,
+                  checked_not_okay: 2,
+                  unchecked: 0
+                }
               },
               {
                 id: 'mock-2',
                 train_number: '54321',
                 train_name: 'Shatabdi Express',
-                departure_station: 'Howrah',
-                arrival_station: 'New Delhi',
-                inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+                location: 'Howrah',
+                date: new Date(Date.now() - 86400000).toISOString(),
                 status: 'approved',
                 created_at: new Date(Date.now() - 86400000).toISOString(),
-                coach_count: 5,
-                issues_count: 0
+                inspector_id: user?.id,
+                stats: {
+                  total_activities: 20,
+                  checked_okay: 20,
+                  checked_not_okay: 0,
+                  unchecked: 0
+                }
               }
             ];
             setTripReports(mockReports);
@@ -504,38 +552,49 @@ function renderInspectorDashboard() {
             id: 'mock-draft',
             train_number: '22222',
             train_name: 'Duronto Express',
-            departure_station: 'Chennai',
-            arrival_station: 'Kolkata',
-            inspection_date: new Date().toISOString(),
+            location: 'Chennai',
+            date: new Date().toISOString(),
             status: 'draft',
             created_at: new Date().toISOString(),
-            coach_count: 2,
-            issues_count: 1,
-            progress: 60
+            inspector_id: user?.id,
+            stats: {
+              total_activities: 20,
+              checked_okay: 12,
+              checked_not_okay: 1,
+              unchecked: 7
+            }
           },
           {
             id: 'mock-1',
             train_number: '12345',
             train_name: 'Rajdhani Express',
-            departure_station: 'New Delhi',
-            arrival_station: 'Mumbai Central',
-            inspection_date: new Date().toISOString(),
+            location: 'New Delhi',
+            date: new Date().toISOString(),
             status: 'submitted',
             created_at: new Date().toISOString(),
-            coach_count: 3,
-            issues_count: 2
+            inspector_id: user?.id,
+            stats: {
+              total_activities: 20,
+              checked_okay: 18,
+              checked_not_okay: 2,
+              unchecked: 0
+            }
           },
           {
             id: 'mock-2',
             train_number: '54321',
             train_name: 'Shatabdi Express',
-            departure_station: 'Howrah',
-            arrival_station: 'New Delhi',
-            inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+            location: 'Howrah',
+            date: new Date(Date.now() - 86400000).toISOString(),
             status: 'approved',
             created_at: new Date(Date.now() - 86400000).toISOString(),
-            coach_count: 5,
-            issues_count: 0
+            inspector_id: user?.id,
+            stats: {
+              total_activities: 20,
+              checked_okay: 20,
+              checked_not_okay: 0,
+              unchecked: 0
+            }
           }
         ];
         setTripReports(mockReports);
@@ -567,7 +626,7 @@ function renderInspectorDashboard() {
   
   // Handler for viewing a report
   const handleViewReport = (reportId: string) => {
-    router.push(`/trips?id=${reportId}`);
+    router.push(`/trips?tripId=${reportId}`);
   };
   
   // Return the inspector dashboard UI

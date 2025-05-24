@@ -6,11 +6,60 @@ import { TripReport } from '@/types/inspection';
  * Extracted from pdfGenerator.ts to improve separation of concerns
  */
 
+interface Profile {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
+interface DatabaseTripReport {
+  id: string;
+  inspector_id: string;
+  train_number: string;
+  train_name: string;
+  location: string;
+  date: string;
+  red_on_time: string;
+  red_off_time: string;
+  status: "submitted" | "approved" | "rejected" | "draft";
+  created_at: string;
+  submitted_at: string | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  approved_by: string | null;
+  rejected_by: string | null;
+  inspector: Profile;
+  trip_activity_results: any[];
+}
+
 interface ReportStats {
   total_activities: number;
   checked_okay: number;
   checked_not_okay: number;
   unchecked: number;
+}
+
+interface Section {
+  id: string;
+  section_number: string;
+  name: string;
+  categories: Category[];
+}
+
+interface Category {
+  id: string;
+  category_number: string;
+  name: string;
+  activities: Activity[];
+}
+
+interface Activity {
+  id: string;
+  activity_number: string;
+  activity_text: string;
+  is_compulsory: boolean;
+  check_status: 'pending' | 'checked-okay' | 'checked-not-okay';
+  remarks: string;
 }
 
 /**
@@ -20,15 +69,35 @@ export async function fetchTripReportData(reportId: string): Promise<TripReport 
   try {
     console.log('Fetching trip report data for report:', reportId);
     
-    // Fetch the trip report with inspector details using a join
+    // Fetch the trip report with inspector details and activity results using explicit joins
     const { data: reportData, error: reportError } = await supabase
       .from('trip_reports')
       .select(`
-        *,
-        inspector:inspector_id (
+        id,
+        inspector_id,
+        train_number,
+        train_name,
+        location,
+        date,
+        red_on_time,
+        red_off_time,
+        status,
+        comments,
+        created_at,
+        submitted_at,
+        reviewed_at,
+        approved_at,
+        supervisor_id,
+        updated_at,
+        trip_activity_results(
           id,
-          name:full_name,
-          email
+          activity_id,
+          check_status,
+          remarks,
+          inspector_id,
+          checked_at,
+          created_at,
+          updated_at
         )
       `)
       .eq('id', reportId)
@@ -44,14 +113,37 @@ export async function fetchTripReportData(reportId: string): Promise<TripReport 
       return null;
     }
     
+    // Fetch inspector details separately
+    const { data: inspectorData, error: inspectorError } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .eq('id', reportData.inspector_id)
+      .single();
+
+    if (inspectorError) {
+      console.error('Error fetching inspector details:', inspectorError);
+      throw inspectorError;
+    }
+    
+    // Transform the data to match expected format
+    const transformedReportData = {
+      ...reportData,
+      inspector: inspectorData ? {
+        id: inspectorData.id,
+        name: inspectorData.name,
+        email: inspectorData.email
+      } : null,
+      trip_activity_results: reportData.trip_activity_results
+    };
+    
     // Fetch all sections, categories, and activities in a single optimized query
     const { data: sectionsData, error: sectionsError } = await supabase
       .from('inspection_sections')
       .select(`
         id, name, section_number,
-        inspection_categories!inner(
+        inspection_categories(
           id, name, category_number,
-          inspection_activities!inner(
+          inspection_activities(
             id, activity_number, activity_text, is_compulsory
           )
         )
@@ -63,23 +155,12 @@ export async function fetchTripReportData(reportId: string): Promise<TripReport 
       throw sectionsError;
     }
     
-    // Fetch all results for this report in a single query
-    const { data: resultsData, error: resultsError } = await supabase
-      .from('trip_activity_results')
-      .select('*')
-      .eq('trip_report_id', reportId);
-      
-    if (resultsError) {
-      console.error('Error fetching activity results:', resultsError);
-      throw resultsError;
-    }
-    
     // Process and combine the data
     const processedSections = sectionsData.map(section => {
       const categories = section.inspection_categories.map(category => {
         const activities = category.inspection_activities.map(activity => {
-          // Find the corresponding result for this activity
-          const result = resultsData.find(r => r.activity_id === activity.id);
+          // Find the corresponding result for this activity from the joined data
+          const result = transformedReportData.trip_activity_results?.find(r => r.activity_id === activity.id);
           
           return {
             id: activity.id,
@@ -112,7 +193,7 @@ export async function fetchTripReportData(reportId: string): Promise<TripReport 
     
     // Combine everything into the final report object
     const finalReport: TripReport = {
-      ...reportData,
+      ...transformedReportData,
       sections: processedSections,
       stats
     };
@@ -127,15 +208,15 @@ export async function fetchTripReportData(reportId: string): Promise<TripReport 
 /**
  * Calculate statistics for the report
  */
-function calculateReportStats(sections: any[]): ReportStats {
+function calculateReportStats(sections: Section[]): ReportStats {
   let total_activities = 0;
   let checked_okay = 0;
   let checked_not_okay = 0;
   let unchecked = 0;
   
-  sections.forEach(section => {
-    section.categories.forEach(category => {
-      category.activities.forEach(activity => {
+  sections.forEach((section: Section) => {
+    section.categories.forEach((category: Category) => {
+      category.activities.forEach((activity: Activity) => {
         total_activities++;
         
         switch (activity.check_status) {
