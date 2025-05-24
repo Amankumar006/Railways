@@ -84,7 +84,7 @@ export default function TripsScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <ActivityIndicator size="large" color={colors.primary} />
         <StyledText style={styles.loadingText}>Loading inspection data...</StyledText>
       </View>
     );
@@ -101,8 +101,8 @@ export default function TripsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[colors.primary[500]]}
-            tintColor={colors.primary[500]}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
       >

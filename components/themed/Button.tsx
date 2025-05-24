@@ -14,7 +14,7 @@ type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps {
-  title: string;
+  title?: string;
   onPress: () => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -147,7 +147,7 @@ export function Button({
     return (
       <>
         {icon && iconPosition === 'left' && icon}
-        <StyledText
+        {title && <StyledText
           style={[
             styles.text,
             styles[`text-${size}`],
@@ -158,7 +158,7 @@ export function Button({
           weight={variant === 'ghost' ? 'medium' : 'bold'}
         >
           {title}
-        </StyledText>
+        </StyledText>}
         {icon && iconPosition === 'right' && icon}
       </>
     );

@@ -10,6 +10,7 @@ import { useColorScheme, View, ActivityIndicator } from 'react-native';
 import { colorScheme, colors } from '../constants/Colors';
 import { useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
+import { QueryProvider } from '../context/QueryContext';
 
 // Prevent splash screen from hiding until we're ready
 SplashScreen.preventAutoHideAsync();
@@ -41,11 +42,13 @@ export default function RootLayout() {
     return null;
   }
   
-  // Provide authentication context to the entire app
+  // Provide authentication context and React Query to the entire app
   return (
-    <AuthProvider>
-      <RootLayoutNavigator />
-    </AuthProvider>
+    <QueryProvider>
+      <AuthProvider>
+        <RootLayoutNavigator />
+      </AuthProvider>
+    </QueryProvider>
   );
 }
 

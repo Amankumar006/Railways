@@ -1,0 +1,22 @@
+diff --git a/components/themed/Button.tsx b/components/themed/Button.tsx
+index 123456..789012 100644
+--- a/components/themed/Button.tsx
++++ b/components/themed/Button.tsx
+@@ -138,7 +138,7 @@ export function Button({
+     return (
+       <>
+         {icon && iconPosition === 'left' && icon}
+-        <StyledText
++        {title && <StyledText
+           style={[
+             styles.text,
+             styles[`text-${size}`],
+@@ -148,7 +148,7 @@ export function Button({
+           weight={variant === 'ghost' ? 'medium' : 'bold'}
+         >
+           {title}
+-        </StyledText>
++        </StyledText>}
+         {icon && iconPosition === 'right' && icon}
+       </>
+     );

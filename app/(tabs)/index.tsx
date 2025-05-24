@@ -21,8 +21,11 @@ import {
   Clock, 
   AlertTriangle,
   ClipboardList,
-  Settings
+  Settings,
+  Eye,
+  Download
 } from 'lucide-react-native';
+import { generateTripReport, sharePDF } from '@/utils/pdfGenerator';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function DashboardScreen() {
@@ -107,10 +110,11 @@ export default function DashboardScreen() {
           let query;
           
           if (isManager) {
-            // Managers see all submitted trip reports
+            // Managers only see submitted trip reports
             query = supabase
               .from('trip_reports')
               .select('*')
+              .eq('status', 'submitted')
               .order('created_at', { ascending: false });
           } else {
             // Inspectors only see their own reports
@@ -209,51 +213,46 @@ export default function DashboardScreen() {
     };
     
     fetchTripReports();
-  }, [user?.id, isManager]);
+  }, [user, isManager]);
   
-
-  
-
-  
+  // Navigation handlers
   const handleTripPress = () => {
-    // Navigate to train selection page first
-    router.push('/train-selection');
+    router.push('/trips');
   };
   
   const handleReportsPress = () => {
-    // For now, just show an alert since these pages don't exist yet
-    alert('Analytics reporting coming soon!');
-    // Future implementation when reports page is created
-    // router.push('/reports');
+    if (isManager) {
+      router.push('/reports');
+    }
   };
   
   const handleUsersPress = () => {
-    // For now, just show an alert since these pages don't exist yet
-    alert('User management coming soon!');
-    // Future implementation when users page is created
-    // router.push('/users');
+    if (isManager) {
+      router.push('/users');
+    }
   };
   
-  // Render different dashboards based on user role
-  if (isManager) {
-    return renderManagerDashboard();
-  } else {
-    return renderInspectorDashboard();
-  }
-}
-
-// Manager Dashboard - Only shows submitted reports from inspectors
-function renderManagerDashboard() {
-  const router = useRouter();
-  const { user } = useAuth();
-  const { colors, theme } = useTheme();
-  
-  // Navigation handlers
-  const handleAdminPress = () => {
-    router.push('/admin');
+  // Handler for viewing a report
+  const handleViewReport = (reportId: string) => {
+    router.push(`/trips?id=${reportId}`);
   };
   
-  return (
+  // Handler for downloading a report as PDF
+  const handleDownloadReport = async (reportId: string) => {
+    try {
+      // Show loading indicator or toast message
+      alert('Generating PDF report...');
+      
+      // Generate and share the HTML report
+      const filePath = await generateTripReport(reportId);
+      await sharePDF(filePath);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF report. Please try again.');
+    }
+  };
+  
+  return isManager ? (
     <StyledView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.indianRailways.blue} />
       
@@ -270,44 +269,119 @@ function renderManagerDashboard() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Manager's View - Only submitted reports */}
+        {/* Manager's View - Submitted reports */}
         <StyledView style={styles.section}>
           <StyledText size="lg" weight="semibold" style={styles.sectionTitle}>
             Inspection Reports
           </StyledText>
           
-          <Card
-            elevation="sm"
-            radius="md"
-            style={styles.emptyStateCard}
-            variant="outlined"
-          >
-            <StyledView style={styles.emptyStateContainer}>
-              <ClipboardList size={40} color={theme.indianRailways.blue} style={{ marginBottom: 16 }} />
-              <StyledText size="md" weight="semibold" style={styles.emptyStateTitle}>
-                Manager Dashboard
-              </StyledText>
-              <StyledText size="sm" color={colors.textSecondary} style={styles.emptyStateText}>
-                Submitted inspection reports from officers will appear here.
-              </StyledText>
-              <StyledText size="xs" color={colors.textSecondary} style={{ marginTop: 8, textAlign: 'center' }}>
-                You can review and approve inspection reports submitted by your team.
-              </StyledText>
+          {loading ? (
+            <StyledView style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.indianRailways.blue} />
+              <StyledText size="sm" style={{ marginTop: 10 }}>Loading reports...</StyledText>
             </StyledView>
-          </Card>
+          ) : tripReports.length === 0 ? (
+            <Card
+              elevation="sm"
+              radius="md"
+              style={styles.emptyStateCard}
+              variant="outlined"
+            >
+              <StyledView style={styles.emptyStateContainer}>
+                <ClipboardList size={40} color={theme.indianRailways.blue} style={{ marginBottom: 16 }} />
+                <StyledText size="md" weight="semibold" style={styles.emptyStateTitle}>
+                  No Reports Yet
+                </StyledText>
+                <StyledText size="sm" color={colors.textSecondary} style={styles.emptyStateText}>
+                  Submitted inspection reports from officers will appear here.
+                </StyledText>
+                <StyledText size="xs" color={colors.textSecondary} style={{ marginTop: 8, textAlign: 'center' }}>
+                  You can view and download inspection reports submitted by your team.
+                </StyledText>
+              </StyledView>
+            </Card>
+          ) : (
+            <>
+              {/* Display the reports */}
+              {tripReports.map((report: any) => (
+                <Card key={report.id} style={styles.reportCard} elevation="sm" radius="md">
+                  <StyledView style={styles.reportHeader}>
+                    <StyledView>
+                      <StyledText size="md" weight="bold">
+                        Train {report.train_number}
+                      </StyledText>
+                      {report.train_name && (
+                        <StyledText size="sm" color={colors.textSecondary}>
+                          {report.train_name}
+                        </StyledText>
+                      )}
+                    </StyledView>
+                    
+                    <StyledView style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status, theme) }]}>
+                      <StyledText size="xs" color={colors.white}>
+                        {formatStatus(report.status)}
+                      </StyledText>
+                    </StyledView>
+                  </StyledView>
+                  
+                  <StyledView style={styles.reportMeta}>
+                    <StyledView style={{ flex: 1 }}>
+                      <StyledText size="xs" color={colors.textSecondary}>
+                        Location
+                      </StyledText>
+                      <StyledText size="sm">
+                        {report.location || 'Not specified'}
+                      </StyledText>
+                    </StyledView>
+                    
+                    <StyledView style={{ flex: 1 }}>
+                      <StyledText size="xs" color={colors.textSecondary}>
+                        Date
+                      </StyledText>
+                      <StyledText size="sm">
+                        {formatDate(report.date)}
+                      </StyledText>
+                    </StyledView>
+                  </StyledView>
+                  
+                  <StyledView style={styles.reportActions}>
+                    <TouchableOpacity 
+                      style={[styles.viewButton, { backgroundColor: theme.indianRailways.blue }]}
+                      onPress={() => handleViewReport(report.id)}
+                    >
+                      <Eye size={16} color="#fff" style={{ marginRight: 5 }} />
+                      <StyledText size="sm" color={colors.white}>
+                        View Report
+                      </StyledText>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.viewButton, { backgroundColor: theme.indianRailways.green, marginLeft: 8 }]}
+                      onPress={() => handleDownloadReport(report.id)}
+                    >
+                      <Download size={16} color="#fff" style={{ marginRight: 5 }} />
+                      <StyledText size="sm" color={colors.white}>
+                        Download PDF
+                      </StyledText>
+                    </TouchableOpacity>
+                  </StyledView>
+                </Card>
+              ))}
+            </>
+          )}
           
           <TouchableOpacity 
-            style={styles.adminButton}
-            onPress={handleAdminPress}
+            style={[styles.adminButton, { marginTop: 20 }]}
+            onPress={handleUsersPress}
           >
             <StyledText size="sm" color={colors.white}>
-              Go to Admin Panel
+              Manage Users
             </StyledText>
           </TouchableOpacity>
         </StyledView>
       </ScrollView>
     </StyledView>
-  );
+  ) : renderInspectorDashboard();
 }
 
 // Inspector Dashboard - Shows their own reports and ability to create new ones
@@ -377,43 +451,19 @@ function renderInspectorDashboard() {
           setTripReports(mockReports);
         } else {
           // Table exists, try to fetch data
-          const { data, error } = await supabase
+          const query = supabase
             .from('trip_reports')
             .select('*')
             .eq('inspector_id', user.id)
             .order('created_at', { ascending: false });
           
+          const { data, error } = await query;
+          
           if (error) {
-            console.error('Error fetching inspector reports:', error);
-            // Create mock data for demo purposes
-            const mockReports = [
-              {
-                id: 'mock-1',
-                train_number: '12345',
-                train_name: 'Rajdhani Express',
-                departure_station: 'New Delhi',
-                arrival_station: 'Mumbai Central',
-                inspection_date: new Date().toISOString(),
-                status: 'submitted',
-                created_at: new Date().toISOString(),
-                coach_count: 3,
-                issues_count: 2
-              },
-              {
-                id: 'mock-2',
-                train_number: '54321',
-                train_name: 'Shatabdi Express',
-                departure_station: 'Howrah',
-                arrival_station: 'New Delhi',
-                inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-                status: 'approved',
-                created_at: new Date(Date.now() - 86400000).toISOString(),
-                coach_count: 5,
-                issues_count: 0
-              }
-            ];
-            setTripReports(mockReports);
+            console.error('Error fetching trip reports:', error);
+            setTripReports([]);
           } else if (data && data.length > 0) {
+            console.log('Fetched trip reports:', data.length);
             setTripReports(data);
           } else {
             // No data found, use mock data
@@ -447,7 +497,7 @@ function renderInspectorDashboard() {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch inspector reports:', error);
+        console.error('Failed to fetch trip reports:', error);
         // Fallback to mock data on any error
         const mockReports = [
           {
@@ -495,36 +545,32 @@ function renderInspectorDashboard() {
     };
     
     fetchInspectorReports();
-  }, [user?.id]);
+  }, [user]);
   
   // Navigation handlers
   const handleTripPress = () => {
-    // Navigate to train selection page first
-    router.push('/train-selection');
+    router.push('/trips');
+  };
+  
+  const handleReportsPress = () => {
+    alert('Analytics reporting coming soon!');
+    // Future implementation when reports page is created
+    // router.push('/reports');
+  };
+  
+  const handleUsersPress = () => {
+    // For now, just show an alert since these pages don't exist yet
+    alert('User management coming soon!');
+    // Future implementation when users page is created
+    // router.push('/users');
   };
   
   // Handler for viewing a report
   const handleViewReport = (reportId: string) => {
-    router.push(`/reports/${reportId}`);
+    router.push(`/trips?id=${reportId}`);
   };
   
-  // Handler for resuming a draft report
-  const handleResumeReport = (report: any) => {
-    // Save the current report data to localStorage for resuming
-    localStorage.setItem('draftReport', JSON.stringify(report));
-    
-    // Navigate to the report form with the report ID and resume mode
-    router.push({
-      pathname: '/train-selection',
-      params: {
-        mode: 'resume',
-        reportId: report.id,
-        trainNumber: report.train_number,
-        trainName: report.train_name
-      }
-    });
-  };
-  
+  // Return the inspector dashboard UI
   return (
     <StyledView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.indianRailways.blue} />
@@ -542,196 +588,118 @@ function renderInspectorDashboard() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Inspector's View - Their reports and ability to create new ones */}
+        {/* Inspector's View - Their own reports */}
         <StyledView style={styles.section}>
           <StyledText size="lg" weight="semibold" style={styles.sectionTitle}>
-            Your Inspection Reports
+            My Inspection Reports
           </StyledText>
-          
-          <TouchableOpacity 
-            style={styles.newReportButton}
-            onPress={handleTripPress}
-          >
-            <StyledText size="sm" color={colors.white}>
-              Start New Inspection
-            </StyledText>
-          </TouchableOpacity>
           
           {loading ? (
             <StyledView style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={theme.indianRailways.blue} />
-              <StyledText style={{ marginTop: 16 }}>Loading reports...</StyledText>
+              <StyledText size="sm" style={{ marginTop: 10 }}>Loading reports...</StyledText>
             </StyledView>
           ) : tripReports.length === 0 ? (
-            <StyledView>
-              {/* Inspection Guidelines Card */}
-              <Card
-                elevation="sm"
-                radius="md"
-                style={styles.guideCard}
-                variant="outlined"
-              >
-                <StyledView style={styles.guideCardHeader}>
-                  <StyledText size="md" weight="semibold">
-                    Inspection Guidelines
-                  </StyledText>
-                </StyledView>
-                <StyledView style={styles.guideCardContent}>
-                  <StyledView style={styles.guideItem}>
-                    <CheckCircle size={16} color={theme.indianRailways.green} style={{ marginRight: 8 }} />
-                    <StyledText size="sm">Inspect all coach components thoroughly</StyledText>
-                  </StyledView>
-                  <StyledView style={styles.guideItem}>
-                    <CheckCircle size={16} color={theme.indianRailways.green} style={{ marginRight: 8 }} />
-                    <StyledText size="sm">Document any issues with photos</StyledText>
-                  </StyledView>
-                  <StyledView style={styles.guideItem}>
-                    <CheckCircle size={16} color={theme.indianRailways.green} style={{ marginRight: 8 }} />
-                    <StyledText size="sm">Rate each component's condition</StyledText>
-                  </StyledView>
-                  <StyledView style={styles.guideItem}>
-                    <CheckCircle size={16} color={theme.indianRailways.green} style={{ marginRight: 8 }} />
-                    <StyledText size="sm">Submit your report when complete</StyledText>
-                  </StyledView>
-                </StyledView>
-              </Card>
-              
-              {/* Quick Stats Card */}
-              <Card
-                elevation="sm"
-                radius="md"
-                style={styles.statsCard}
-                variant="outlined"
-              >
-                <StyledView style={styles.guideCardHeader}>
-                  <StyledText size="md" weight="semibold">
-                    Inspection Statistics
-                  </StyledText>
-                </StyledView>
-                <StyledView style={styles.statsContainer}>
-                  <StyledView style={styles.statItem}>
-                    <StyledView style={[styles.statIconContainer, { backgroundColor: theme.indianRailways.blue + '20' }]}>
-                      <Train size={20} color={theme.indianRailways.blue} />
-                    </StyledView>
-                    <StyledText size="lg" weight="bold" style={{ marginTop: 8 }}>0</StyledText>
-                    <StyledText size="xs" color={colors.textSecondary}>Trains Inspected</StyledText>
-                  </StyledView>
-                  
-                  <StyledView style={styles.statItem}>
-                    <StyledView style={[styles.statIconContainer, { backgroundColor: theme.indianRailways.saffron + '20' }]}>
-                      <AlertTriangle size={20} color={theme.indianRailways.saffron} />
-                    </StyledView>
-                    <StyledText size="lg" weight="bold" style={{ marginTop: 8 }}>0</StyledText>
-                    <StyledText size="xs" color={colors.textSecondary}>Issues Reported</StyledText>
-                  </StyledView>
-                  
-                  <StyledView style={styles.statItem}>
-                    <StyledView style={[styles.statIconContainer, { backgroundColor: theme.indianRailways.green + '20' }]}>
-                      <CheckCircle size={20} color={theme.indianRailways.green} />
-                    </StyledView>
-                    <StyledText size="lg" weight="bold" style={{ marginTop: 8 }}>0</StyledText>
-                    <StyledText size="xs" color={colors.textSecondary}>Reports Approved</StyledText>
-                  </StyledView>
-                </StyledView>
-              </Card>
-              
-              {/* Empty State Card */}
-              <Card
-                elevation="sm"
-                radius="md"
-                style={styles.emptyStateCard}
-                variant="outlined"
-              >
-                <StyledView style={styles.emptyStateContainer}>
-                  <ClipboardList size={40} color={theme.indianRailways.blue} style={{ marginBottom: 16 }} />
-                  <StyledText size="md" weight="semibold" style={styles.emptyStateTitle}>
-                    No Reports Yet
-                  </StyledText>
-                  <StyledText size="sm" color={colors.textSecondary} style={styles.emptyStateText}>
-                    Start a new inspection to create your first report.
-                  </StyledText>
-                </StyledView>
-              </Card>
-            </StyledView>
-          ) : (
-            <Animated.View entering={FadeInDown.duration(500).delay(200)}>
-              {tripReports.map((report, index) => (
-                <Card
-                  key={report.id || index}
-                  elevation="sm"
-                  radius="md"
-                  style={styles.reportCard}
-                  variant="outlined"
+            <Card
+              elevation="sm"
+              radius="md"
+              style={styles.emptyStateCard}
+              variant="outlined"
+            >
+              <StyledView style={styles.emptyStateContainer}>
+                <ClipboardList size={40} color={theme.indianRailways.blue} style={{ marginBottom: 16 }} />
+                <StyledText size="md" weight="semibold" style={styles.emptyStateTitle}>
+                  No Reports Yet
+                </StyledText>
+                <StyledText size="sm" color={colors.textSecondary} style={styles.emptyStateText}>
+                  You haven't created any inspection reports yet.
+                </StyledText>
+                <TouchableOpacity
+                  style={[styles.startInspectionButton, { backgroundColor: theme.indianRailways.blue }]}
+                  onPress={handleTripPress}
                 >
+                  <StyledText size="sm" color={colors.white}>
+                    Start New Inspection
+                  </StyledText>
+                </TouchableOpacity>
+              </StyledView>
+            </Card>
+          ) : (
+            <>
+              {/* Display the reports */}
+              {tripReports.map((report: any) => (
+                <Card key={report.id} style={styles.reportCard} elevation="sm" radius="md">
                   <StyledView style={styles.reportHeader}>
-                    <StyledText size="md" weight="semibold">
-                      {report.train_name || `Train #${report.train_number}`}
-                    </StyledText>
-                    <StyledView 
-                      style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status, theme) + '20' }]}
-                    >
-                      <StyledText 
-                        size="xs" 
-                        color={getStatusColor(report.status, theme)}
-                      >
+                    <StyledView>
+                      <StyledText size="md" weight="bold">
+                        Train {report.train_number}
+                      </StyledText>
+                      {report.train_name && (
+                        <StyledText size="sm" color={colors.textSecondary}>
+                          {report.train_name}
+                        </StyledText>
+                      )}
+                    </StyledView>
+                    
+                    <StyledView style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status, theme) }]}>
+                      <StyledText size="xs" color={colors.white}>
                         {formatStatus(report.status)}
                       </StyledText>
                     </StyledView>
                   </StyledView>
                   
-                  <StyledView style={styles.reportInfo}>
-                    <StyledText size="sm" color={colors.textSecondary}>
-                      {report.departure_station} to {report.arrival_station}
-                    </StyledText>
-                  </StyledView>
-                  
                   <StyledView style={styles.reportMeta}>
-                    <StyledView style={{ marginRight: 16 }}>
+                    <StyledView style={{ flex: 1 }}>
+                      <StyledText size="xs" color={colors.textSecondary}>
+                        Location
+                      </StyledText>
+                      <StyledText size="sm">
+                        {report.location || 'Not specified'}
+                      </StyledText>
+                    </StyledView>
+                    
+                    <StyledView style={{ flex: 1 }}>
                       <StyledText size="xs" color={colors.textSecondary}>
                         Date
                       </StyledText>
                       <StyledText size="sm">
-                        {formatDate(report.inspection_date || report.created_at)}
-                      </StyledText>
-                    </StyledView>
-                    
-                    <StyledView style={{ marginRight: 16 }}>
-                      <StyledText size="xs" color={colors.textSecondary}>
-                        Coaches
-                      </StyledText>
-                      <StyledText size="sm">
-                        {report.coach_count || 'N/A'}
-                      </StyledText>
-                    </StyledView>
-                    
-                    <StyledView>
-                      <StyledText size="xs" color={colors.textSecondary}>
-                        Issues
-                      </StyledText>
-                      <StyledText size="sm">
-                        {report.issues_count || 0}
+                        {formatDate(report.date)}
                       </StyledText>
                     </StyledView>
                   </StyledView>
                   
+                  {report.status === 'draft' && report.progress !== undefined && (
+                    <StyledView style={{ marginVertical: 8 }}>
+                      <StyledView style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <StyledText size="xs" color={colors.textSecondary}>
+                          Inspection Progress
+                        </StyledText>
+                        <StyledText size="xs" color={colors.textSecondary}>
+                          {report.progress}%
+                        </StyledText>
+                      </StyledView>
+                      <ProgressBar progress={report.progress / 100} />
+                    </StyledView>
+                  )}
+                  
                   <StyledView style={styles.reportActions}>
                     {report.status === 'draft' ? (
                       <TouchableOpacity 
-                        style={[styles.resumeButton, { backgroundColor: theme.indianRailways.saffron + '10' }]}
-                        onPress={() => handleResumeReport(report)}
+                        style={[styles.resumeButton, { backgroundColor: theme.indianRailways.saffron }]}
+                        onPress={() => handleViewReport(report.id)}
                       >
-                        <Clock size={16} color={theme.indianRailways.saffron} style={{ marginRight: 6 }} />
-                        <StyledText size="sm" color={theme.indianRailways.saffron}>
-                          Resume Draft
+                        <Clock size={16} color="#fff" style={{ marginRight: 5 }} />
+                        <StyledText size="sm" color={colors.white}>
+                          Resume Inspection
                         </StyledText>
                       </TouchableOpacity>
                     ) : (
                       <TouchableOpacity 
-                        style={[styles.viewButton, { backgroundColor: theme.indianRailways.blue + '10' }]}
+                        style={[styles.viewButton, { backgroundColor: theme.indianRailways.blue }]}
                         onPress={() => handleViewReport(report.id)}
                       >
-                        <File size={16} color={theme.indianRailways.blue} style={{ marginRight: 6 }} />
-                        <StyledText size="sm" color={theme.indianRailways.blue}>
+                        <Eye size={16} color="#fff" style={{ marginRight: 5 }} />
+                        <StyledText size="sm" color={colors.white}>
                           View Report
                         </StyledText>
                       </TouchableOpacity>
@@ -739,7 +707,17 @@ function renderInspectorDashboard() {
                   </StyledView>
                 </Card>
               ))}
-            </Animated.View>
+              
+              {/* Button to start a new inspection */}
+              <TouchableOpacity
+                style={[styles.startInspectionButton, { backgroundColor: theme.indianRailways.green, marginTop: 16 }]}
+                onPress={handleTripPress}
+              >
+                <StyledText size="sm" color={colors.white}>
+                  Start New Inspection
+                </StyledText>
+              </TouchableOpacity>
+            </>
           )}
         </StyledView>
       </ScrollView>
