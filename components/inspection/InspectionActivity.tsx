@@ -54,7 +54,10 @@ const InspectionActivityComponent: React.FC<InspectionActivityProps> = ({
         <StyledText 
           style={[
             styles.activityText,
-            activity.is_compulsory && { fontWeight: 'bold' }
+            { 
+              color: '#000000',
+              fontWeight: 'bold'
+            }
           ]}
         >
           {activity.activity_text}
@@ -135,6 +138,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   remarksInput: {
+    backgroundColor: '#FFFFFF',
     marginTop: 8,
     borderWidth: 1,
     borderRadius: 4,

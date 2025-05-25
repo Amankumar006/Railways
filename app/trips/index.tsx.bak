@@ -136,7 +136,7 @@ export default function TripReport() {
           
           <View style={styles.headerRow}>
             <View style={[styles.headerCell, { borderLeftWidth: 1 }]}>
-              <StyledText size="sm" weight="bold">RED On:</StyledText>
+              <StyledText size="sm" weight="bold">Red On:</StyledText>
             </View>
             <View style={[styles.headerCell, { flex: 1 }]}>
               <TextInput
@@ -147,7 +147,7 @@ export default function TripReport() {
               />
             </View>
             <View style={[styles.headerCell, { borderLeftWidth: 1 }]}>
-              <StyledText size="sm" weight="bold">RED Off:</StyledText>
+              <StyledText size="sm" weight="bold">Red Off:</StyledText>
             </View>
             <View style={[styles.headerCell, { flex: 1 }]}>
               <TextInput

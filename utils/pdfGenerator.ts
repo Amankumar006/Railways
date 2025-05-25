@@ -15,22 +15,65 @@ import { generateReportTemplate } from './reportTemplateGenerator';
 export async function generateTripReport(reportId: string): Promise<void> {
   try {
     // Show loading message
-    Alert.alert('Generating Report', 'Please wait while we generate your report...');
+    if (Platform.OS !== 'web') {
+      Alert.alert('Generating Report', 'Please wait while we generate your report...');
+    }
     
     // Fetch all report data
     const reportData = await fetchTripReportData(reportId);
     
     if (!reportData) {
-      Alert.alert('Error', 'Failed to load report data. Please try again.');
+      if (Platform.OS === 'web') {
+        console.error('Failed to load report data');
+      } else {
+        Alert.alert('Error', 'Failed to load report data. Please try again.');
+      }
       return;
     }
     
     // Generate HTML content
     const htmlContent = generateReportTemplate(reportData);
     
+    if (Platform.OS === 'web') {
+      try {
+        // For web, generate PDF using print API
+        const { uri } = await Print.printToFileAsync({
+          html: htmlContent,
+          base64: true
+        });
+
+        // Create a download link
+        const link = document.createElement('a');
+        link.href = `data:application/pdf;base64,${uri}`;
+        link.download = `Trip_Report_${reportId}.pdf`;
+        
+        // Append to document, click and remove
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        return;
+      } catch (error) {
+        console.error('Error generating PDF for web:', error);
+        
+        // Fallback to direct HTML download if PDF generation fails
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Trip_Report_${reportId}.html`;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }
+      return;
+    }
+    
+    // For mobile platforms, use expo-print
     console.log('Generating PDF for report:', reportId);
     
-    // Generate PDF file
     const { uri } = await Print.printToFileAsync({
       html: htmlContent,
       base64: false
@@ -65,7 +108,9 @@ export async function generateTripReport(reportId: string): Promise<void> {
     }
   } catch (error) {
     console.error('Error generating trip report:', error);
-    Alert.alert('Error', 'Failed to generate report. Please try again.');
+    if (Platform.OS !== 'web') {
+      Alert.alert('Error', 'Failed to generate report. Please try again.');
+    }
   }
 }
 

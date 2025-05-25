@@ -4,6 +4,13 @@ import { InspectionSection, TripReport } from '@/types/inspection';
 import { Alert } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 
+// Interface for database activity
+interface ActivityData {
+  id: string;
+  activity_number?: string;
+  category_id?: string;
+}
+
 /**
  * Custom hook to manage inspection data and trip reports
  */
@@ -17,7 +24,9 @@ export function useInspectionData() {
   const [redOnTime, setRedOnTime] = useState('');
   const [redOffTime, setRedOffTime] = useState('');
   const [location, setLocation] = useState('');
+  const [lineNumber, setLineNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<'draft' | 'submitted' | 'approved' | 'rejected'>('draft');
 
   /**
    * Check if a draft report already exists for the current day
@@ -109,16 +118,18 @@ export function useInspectionData() {
       setTrainNumber(reportData.train_number || '');
       setTrainName(reportData.train_name || '');
       setLocation(reportData.location || '');
+      setLineNumber(reportData.line_number || '');
       setRedOnTime(reportData.red_on_time || '');
       setRedOffTime(reportData.red_off_time || '');
+      setStatus(reportData.status || 'draft');
       
       // Step 2: Fetch all inspection sections with categories and activities
       console.log('Fetching inspection data structure...');
-      await fetchInspectionData(reportId);
+      await fetchInspectionData(reportData.id);
       
       // Step 3: Fetch the results for this report - this is critical for seeing the status markings
       console.log('Fetching activity results...');
-      await fetchTripResults(reportId);
+      await fetchTripResults(reportData.id);
       
       console.log('Report loading complete');
       setLoading(false);
@@ -151,7 +162,8 @@ export function useInspectionData() {
           inspector_id: user.id,
           date: new Date().toISOString(),
           status: 'draft',
-          location: location
+          location: "JSDG",
+          line_number: lineNumber
         })
         .select()
         .single();
@@ -207,70 +219,16 @@ export function useInspectionData() {
       
       console.log(`Fetched ${sectionsData.length} sections with nested categories and activities`);
       
-      // If this is an existing report, fetch all results in a single query
-      let allResults = [];
-      if (existingReportId) {
-        console.log(`Fetching activity results for report ID: ${existingReportId}`);
-        
-        // First try to get results directly
-        const { data: resultsData, error: resultsError } = await supabase
-          .from('trip_activity_results')
-          .select('*')
-          .eq('trip_report_id', existingReportId);
-          
-        if (resultsError) {
-          console.error('Error fetching results:', resultsError);
-        } else {
-          allResults = resultsData || [];
-          console.log(`Fetched ${allResults.length} activity results for report ${existingReportId}`);
-          
-          // Debug the results
-          if (allResults.length > 0) {
-            console.log('Sample result:', allResults[0]);
-            const okCount = allResults.filter(r => r.check_status === 'checked-okay').length;
-            const notOkCount = allResults.filter(r => r.check_status === 'checked-not-okay').length;
-            console.log(`Status counts - OK: ${okCount}, Not OK: ${notOkCount}, Pending: ${allResults.length - okCount - notOkCount}`);
-          } else {
-            console.warn('No activity results found for this report. This may indicate a data issue.');
-            
-            // As a fallback, try to fetch the report to see if it exists
-            const { data: reportData, error: reportError } = await supabase
-              .from('trip_reports')
-              .select('*')
-              .eq('id', existingReportId)
-              .single();
-              
-            if (reportError) {
-              console.error('Error fetching report:', reportError);
-            } else if (reportData) {
-              console.log('Report exists but has no activity results:', reportData);
-            }
-          }
-        }
-      }
-      
-      // Process the nested data into our expected format
+      // Process the nested data into our expected format (without results yet)
       const formattedSections: InspectionSection[] = sectionsData.map(section => {
         // Extract and format categories
         const formattedCategories = section.inspection_categories.map(category => {
           // Extract and format activities
           const formattedActivities = category.inspection_activities.map(activity => {
-            // For existing reports, find the corresponding result
-            if (existingReportId) {
-              const result = allResults.find(r => r.activity_id === activity.id);
-              if (result) {
-                return {
-                  ...activity,
-                  checkStatus: result.check_status || 'pending',
-                  remarks: result.remarks || ''
-                };
-              }
-            }
-            
             // Default for new activities or those without results
             return {
               ...activity,
-              checkStatus: 'pending',
+              checkStatus: 'pending' as 'pending' | 'checked-okay' | 'checked-not-okay',
               remarks: ''
             };
           }).sort((a, b) => a.display_order - b.display_order); // Sort activities by display order
@@ -291,6 +249,12 @@ export function useInspectionData() {
       console.log(`Processed ${formattedSections.length} sections with their nested data`);
       setSections(formattedSections);
       
+      // If this is an existing report, fetch all results separately to ensure we have all the data
+      if (existingReportId) {
+        console.log(`Fetching activity results for report ID: ${existingReportId}`);
+        await fetchTripResults(existingReportId);
+      }
+      
     } catch (error) {
       console.error('Error fetching inspection data:', error);
       Alert.alert('Error', 'Failed to load inspection checklist. Please try again.');
@@ -302,7 +266,6 @@ export function useInspectionData() {
   /**
    * Fetch trip results for an existing report
    * This function has been enhanced to ensure proper loading of activity results
-   * for both inspectors and admins viewing reports
    */
   const fetchTripResults = async (reportId: string) => {
     try {
@@ -312,17 +275,26 @@ export function useInspectionData() {
       // This ensures admins see the latest status
       const { data: reportData, error: reportError } = await supabase
         .from('trip_reports')
-        .select('status')
+        .select('*')
         .eq('id', reportId)
         .single();
         
       if (reportError) {
         console.error('Error checking report status:', reportError);
+        throw reportError;
       } else {
-        console.log(`Report status: ${reportData?.status}`);
+        console.log(`Report data:`, reportData);
+        
+        // Update report form data
+        setTrainNumber(reportData.train_number || '');
+        setTrainName(reportData.train_name || '');
+        setLocation(reportData.location || '');
+        setLineNumber(reportData.line_number || '');
+        setRedOnTime(reportData.red_on_time || '');
+        setRedOffTime(reportData.red_off_time || '');
       }
       
-      // Always fetch results for submitted reports to ensure we have the latest data
+      // Always fetch results for reports to ensure we have the latest data
       console.log('Fetching trip activity results...');
       const { data: resultsData, error: resultsError } = await supabase
         .from('trip_activity_results')
@@ -334,30 +306,50 @@ export function useInspectionData() {
         throw resultsError;
       }
       
-      if (!resultsData || resultsData.length === 0) {
-        console.warn(`No activity results found for report ${reportId}. This may indicate a data issue.`);
+      // Count existing results for comparison
+      const existingResultsCount = resultsData?.length || 0;
+      console.log(`Fetched ${existingResultsCount} activity results`);
+      
+      // Check for potential data consistency issues
+      // Count how many activities we should have results for
+      let expectedActivitiesCount = 0;
+      sections.forEach(section => {
+        section.categories.forEach(category => {
+          expectedActivitiesCount += category.activities.length;
+        });
+      });
+      
+      console.log(`Expected ${expectedActivitiesCount} activity results based on sections data`);
+      
+      // If we're missing results, initialize them
+      if (existingResultsCount < expectedActivitiesCount) {
+        console.warn(`Missing activity results: ${expectedActivitiesCount - existingResultsCount}. Creating missing entries.`);
+        await initializeActivityResults(reportId);
         
-        // Check if this is a submitted report that should have results
-        const { data: reportStatus } = await supabase
-          .from('trip_reports')
-          .select('status')
-          .eq('id', reportId)
-          .single();
+        // Fetch the results again after initialization
+        const { data: updatedResults, error: updatedError } = await supabase
+          .from('trip_activity_results')
+          .select('*')
+          .eq('trip_report_id', reportId);
           
-        if (reportStatus && reportStatus.status === 'submitted') {
-          console.warn('This is a submitted report with no activity results. This is unexpected.');
-          Alert.alert(
-            'Missing Data', 
-            'This report appears to be missing inspection data. The status markings may not be visible.'
-          );
-        } else if (reportStatus && reportStatus.status === 'draft') {
-          console.log('This is a draft report. No activity results are expected yet.');
+        if (updatedError) {
+          console.error('Error fetching updated results:', updatedError);
+          throw updatedError;
         }
         
-        return;
+        // Use the updated results
+        if (updatedResults) {
+          console.log(`After initialization: ${updatedResults.length} activity results`);
+          resultsData.length = 0; // Clear the array
+          resultsData.push(...updatedResults); // Add the updated results
+        }
       }
       
-      console.log(`Successfully fetched ${resultsData.length} activity results`);
+      if (!resultsData || resultsData.length === 0) {
+        console.warn(`No activity results found for report ${reportId} even after initialization. Creating default entries.`);
+        await initializeActivityResults(reportId);
+        return;
+      }
       
       // Log statistics for debugging
       const okCount = resultsData.filter(r => r.check_status === 'checked-okay').length;
@@ -366,9 +358,9 @@ export function useInspectionData() {
       
       console.log(`Status counts - OK: ${okCount}, Not OK: ${notOkCount}, Pending: ${pendingCount}`);
       
-      // Update sections with results
+      // Update sections with results - create a new copy to ensure state changes
       setSections(prev => {
-        const updatedSections = [...prev];
+        const updatedSections = JSON.parse(JSON.stringify(prev));
         
         // For each result, update the corresponding activity
         resultsData.forEach(result => {
@@ -396,24 +388,102 @@ export function useInspectionData() {
         return updatedSections;
       });
       
-      // Verify the update was applied
-      let verifiedOkCount = 0;
-      let verifiedNotOkCount = 0;
-      
-      for (const section of sections) {
-        for (const category of section.categories) {
-          for (const activity of category.activities) {
-            if (activity.checkStatus === 'checked-okay') verifiedOkCount++;
-            if (activity.checkStatus === 'checked-not-okay') verifiedNotOkCount++;
-          }
-        }
-      }
-      
-      console.log(`Verified status counts - OK: ${verifiedOkCount}, Not OK: ${verifiedNotOkCount}`);
-      
     } catch (error) {
       console.error('Error fetching trip results:', error);
       Alert.alert('Error', 'Failed to load inspection results. Please try again.');
+    }
+  };
+
+  /**
+   * Initialize activity results for a report that's missing them
+   */
+  const initializeActivityResults = async (reportId: string) => {
+    if (!user?.id) return;
+    
+    try {
+      console.log('Initializing missing activity results');
+      
+      // First, get all activities from all sections
+      const allActivities: {activityId: string}[] = [];
+      
+      // Collect from sections data
+      sections.forEach((section) => {
+        section.categories.forEach((category) => {
+          category.activities.forEach((activity: { id: string }) => {
+            allActivities.push({
+              activityId: activity.id
+            });
+          });
+        });
+      });
+      
+      console.log(`Found ${allActivities.length} activities that need results`);
+      
+      // Verify with database to ensure we have all activities
+      try {
+        interface DbActivity { id: string; }
+        
+        const { data, error } = await supabase
+          .from('inspection_activities')
+          .select('id')
+          .eq('active', true);
+          
+        if (error) {
+          console.error('Error fetching all activities:', error);
+        } else if (data && Array.isArray(data)) {
+          // Check if there are any activities in the database that aren't in our sections
+          const sectionActivityIds = new Set(allActivities.map((a: {activityId: string}) => a.activityId));
+          
+          // Find missing activities with proper typing
+          const missingActivities = data as DbActivity[];
+          const activitiesToAdd = missingActivities.filter(item => !sectionActivityIds.has(item.id));
+          
+          if (activitiesToAdd.length > 0) {
+            console.warn(`Found ${activitiesToAdd.length} activities in database not in sections data`);
+            
+            // Add them to our list
+            activitiesToAdd.forEach((item: DbActivity) => {
+              allActivities.push({ activityId: item.id });
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error checking for additional activities:', err);
+      }
+      
+      // Now check which ones already have results
+      const { data: existingResults, error: existingError } = await supabase
+        .from('trip_activity_results')
+        .select('activity_id')
+        .eq('trip_report_id', reportId);
+        
+      if (existingError) {
+        console.error('Error fetching existing results:', existingError);
+      }
+      
+      // Filter to only initialize activities that don't have results yet
+      const existingActivityIds = new Set(existingResults?.map(r => r.activity_id) || []);
+      const activitiesToInitialize = allActivities.filter(a => !existingActivityIds.has(a.activityId));
+      
+      console.log(`Initializing ${activitiesToInitialize.length} missing activity results`);
+      
+      // Create default entries for all missing activities
+      for (const activity of activitiesToInitialize) {
+        await supabase
+          .from('trip_activity_results')
+          .insert({
+            trip_report_id: reportId,
+            activity_id: activity.activityId,
+            check_status: 'pending' as 'pending' | 'checked-okay' | 'checked-not-okay',
+            remarks: '',
+            inspector_id: user.id
+          });
+      }
+      
+      console.log('Initialized missing activity results');
+      
+    } catch (error) {
+      console.error('Error initializing activity results:', error);
     }
   };
 
@@ -678,7 +748,10 @@ export function useInspectionData() {
    * Submit the trip report with enhanced validation
    */
   const submitReport = async () => {
-    if (!tripReportId) return;
+    if (!tripReportId) {
+      Alert.alert('Error', 'Report ID is missing. Cannot submit report.');
+      return;
+    }
     
     try {
       setSubmitting(true);
@@ -697,8 +770,117 @@ export function useInspectionData() {
         return;
       }
       
+      // Ensure that basic trip details are saved
+      console.log('Saving trip details before submission...');
+      const { error: updateError } = await supabase
+        .from('trip_reports')
+        .update({
+          train_number: trainNumber.trim(),
+          train_name: trainName.trim(),
+          location: "JSDG",
+          line_number: lineNumber.trim(),
+          red_on_time: redOnTime,
+          red_off_time: redOffTime,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', tripReportId);
+      
+      if (updateError) {
+        console.error('Error updating trip details:', updateError);
+        Alert.alert('Error', 'Failed to save trip details. Please try again.');
+        setSubmitting(false);
+        return;
+      }
+      
+      // Ensure all sections/activities have corresponding results before submission
+      console.log('Ensuring all activities have corresponding results...');
+      const missingCount = await ensureAllActivitiesHaveResults(tripReportId);
+      if (missingCount > 0) {
+        console.log(`Created ${missingCount} missing activity results`);
+      }
+      
+      // Perform a comprehensive data check to verify data integrity
+      console.log('Verifying data integrity...');
+      let allDataValid = true;
+      let validationIssues = [];
+      
+      // Verify train number is properly saved
+      const { data: verifyReport, error: verifyReportError } = await supabase
+        .from('trip_reports')
+        .select('train_number, train_name, location, line_number')
+        .eq('id', tripReportId)
+        .single();
+        
+      if (verifyReportError) {
+        console.error('Error verifying report data:', verifyReportError);
+        validationIssues.push('Could not verify report data');
+        allDataValid = false;
+      } else if (!verifyReport.train_number || verifyReport.train_number !== trainNumber.trim()) {
+        console.error('Train number mismatch or missing:', verifyReport.train_number);
+        validationIssues.push('Train number not saved correctly');
+        allDataValid = false;
+        
+        // Try to fix it
+        await supabase
+          .from('trip_reports')
+          .update({ train_number: trainNumber.trim() })
+          .eq('id', tripReportId);
+      }
+      
+      // Verify all activities have results
+      const { data: activities, error: activitiesError } = await supabase
+        .from('inspection_activities')
+        .select('id')
+        .eq('active', true);
+        
+      if (activitiesError) {
+        console.error('Error fetching activities for validation:', activitiesError);
+        validationIssues.push('Could not verify activities');
+        allDataValid = false;
+      } else {
+        const { data: results, error: resultsError } = await supabase
+          .from('trip_activity_results')
+          .select('activity_id')
+          .eq('trip_report_id', tripReportId);
+          
+        if (resultsError) {
+          console.error('Error fetching results for validation:', resultsError);
+          validationIssues.push('Could not verify activity results');
+          allDataValid = false;
+        } else {
+          const activityIds = activities.map(a => a.id);
+          const resultActivityIds = results.map(r => r.activity_id);
+          
+          // Check if every activity has a result
+          const missingResults = activityIds.filter(id => !resultActivityIds.includes(id));
+          
+          if (missingResults.length > 0) {
+            console.error(`Missing results for ${missingResults.length} activities`);
+            validationIssues.push(`Missing results for ${missingResults.length} activities`);
+            allDataValid = false;
+            
+            // Try to fix by calling ensureAllActivitiesHaveResults again
+            await ensureAllActivitiesHaveResults(tripReportId);
+          }
+        }
+      }
+      
+      if (!allDataValid) {
+        console.warn('Data validation found issues:', validationIssues);
+        // If there are validation issues, warn the user but allow submission if they confirm
+        Alert.alert(
+          'Data Validation Issues',
+          `The following issues were found:\n- ${validationIssues.join('\n- ')}\n\nAttempts were made to fix these issues. Do you want to submit anyway?`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => setSubmitting(false) },
+            { text: 'Submit Anyway', onPress: () => finalizeSubmission() }
+          ]
+        );
+        return;
+      }
+      
       // Validate that at least some activities have been checked
-      console.log('Validating activity results...');
+      console.log('Validating activity completion...');
       const { data: resultsData, error: resultsError } = await supabase
         .from('trip_activity_results')
         .select('*')
@@ -706,6 +888,9 @@ export function useInspectionData() {
         
       if (resultsError) {
         console.error('Error checking activity results:', resultsError);
+        Alert.alert('Error', 'Failed to check inspection data. Please try again.');
+        setSubmitting(false);
+        return;
       }
       
       // Count checked activities
@@ -760,26 +945,72 @@ export function useInspectionData() {
   };
   
   /**
+   * Ensure all activities have corresponding results
+   */
+  const ensureAllActivitiesHaveResults = async (reportId: string): Promise<number> => {
+    if (!user?.id) return 0;
+    
+    try {
+      // Get all activities IDs from sections
+      const allActivityIds: string[] = [];
+      sections.forEach((section) => {
+        section.categories.forEach((category) => {
+          category.activities.forEach((activity: { id: string }) => {
+            allActivityIds.push(activity.id);
+          });
+        });
+      });
+      
+      console.log(`Total activities in sections: ${allActivityIds.length}`);
+      
+      // Get existing result activity IDs
+      const { data: existingResults, error: existingError } = await supabase
+        .from('trip_activity_results')
+        .select('activity_id')
+        .eq('trip_report_id', reportId);
+        
+      if (existingError) {
+        console.error('Error fetching existing results:', existingError);
+        return 0;
+      }
+      
+      const existingActivityIds = existingResults?.map(r => r.activity_id) || [];
+      console.log(`Existing activity results: ${existingActivityIds.length}`);
+      
+      // Find missing activity IDs
+      const missingActivityIds = allActivityIds.filter(id => !existingActivityIds.includes(id));
+      console.log(`Missing activity results: ${missingActivityIds.length}`);
+      
+      // Create missing results
+      for (const activityId of missingActivityIds) {
+        const { error: insertError } = await supabase
+          .from('trip_activity_results')
+          .insert({
+            trip_report_id: reportId,
+            activity_id: activityId,
+            check_status: 'pending' as 'pending' | 'checked-okay' | 'checked-not-okay',
+            remarks: '',
+            inspector_id: user.id
+          });
+          
+        if (insertError) {
+          console.error(`Error creating result for activity ${activityId}:`, insertError);
+        }
+      }
+      
+      return missingActivityIds.length;
+    } catch (error) {
+      console.error('Error ensuring all activities have results:', error);
+      return 0;
+    }
+  };
+
+  /**
    * Finalize the report submission by updating the database
    */
   const finalizeSubmission = async () => {
     try {
       console.log('Finalizing report submission...');
-      
-      // Validate required fields
-      if (!trainNumber.trim()) {
-        Alert.alert('Error', 'Train number is required');
-        setSubmitting(false);
-        return;
-      }
-      
-      if (!location.trim()) {
-        Alert.alert('Error', 'Location is required');
-        setSubmitting(false);
-        return;
-      }
-      
-      console.log(`Submitting report with train number: ${trainNumber}, train name: ${trainName}, location: ${location}`);
       
       // Update the report status to submitted with all required fields
       const { error: updateError } = await supabase
@@ -789,7 +1020,8 @@ export function useInspectionData() {
           submitted_at: new Date().toISOString(),
           train_number: trainNumber.trim(),
           train_name: trainName.trim(),
-          location: location.trim(),
+          location: "JSDG",
+          line_number: lineNumber.trim(),
           red_on_time: redOnTime,
           red_off_time: redOffTime
         })
@@ -802,86 +1034,7 @@ export function useInspectionData() {
         return;
       }
       
-      console.log('Report details updated successfully!');
-      
-      // Ensure all activity results are properly saved
-      // First, collect all activities from all sections
-      let allActivities: {sectionId: string, categoryId: string, activityId: string}[] = [];
-      sections.forEach(section => {
-        section.categories.forEach(category => {
-          category.activities.forEach(activity => {
-            allActivities.push({
-              sectionId: section.id,
-              categoryId: category.id,
-              activityId: activity.id
-            });
-          });
-        });
-      });
-      
-      console.log(`Ensuring all ${allActivities.length} activities have results saved...`);
-      
-      // Verify that activity results were saved
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('trip_activity_results')
-        .select('*')
-        .eq('trip_report_id', tripReportId);
-        
-      if (verifyError) {
-        console.error('Error verifying activity results:', verifyError);
-      } else {
-        console.log(`Found ${verifyData?.length || 0} activity results in database`);
-        
-        // Check if we're missing any results
-        if (verifyData && verifyData.length < allActivities.length) {
-          console.warn(`Missing activity results: ${allActivities.length - verifyData.length} activities don't have saved results`);
-          
-          // For activities without results, create pending results
-          const existingResultMap = new Map();
-          verifyData.forEach(result => {
-            existingResultMap.set(`${result.activity_id}`, true);
-          });
-          
-          // Create missing results
-          const missingActivities = allActivities.filter(activity => {
-            return !existingResultMap.has(`${activity.activityId}`);
-          });
-          
-          if (missingActivities.length > 0) {
-            console.log(`Creating ${missingActivities.length} missing activity results...`);
-            
-            // Create results for missing activities
-            for (const activity of missingActivities) {
-              const { error: insertError } = await supabase
-                .from('trip_activity_results')
-                .insert({
-                  trip_report_id: tripReportId,
-                  activity_id: activity.activityId,
-                  check_status: 'pending',
-                  remarks: '',
-                  inspector_id: user?.id,
-                  updated_at: new Date().toISOString()
-                });
-                
-              if (insertError) {
-                console.error('Error creating missing activity result:', insertError);
-              }
-            }
-          }
-        }
-      }
-      
-      // Final verification
-      const { data: finalVerifyData, error: finalVerifyError } = await supabase
-        .from('trip_activity_results')
-        .select('*')
-        .eq('trip_report_id', tripReportId);
-        
-      if (finalVerifyError) {
-        console.error('Error in final verification:', finalVerifyError);
-      } else {
-        console.log(`Final verification: ${finalVerifyData?.length || 0} activity results saved`);
-      }
+      console.log('Report successfully submitted!');
       
       Alert.alert(
         'Report Submitted',
@@ -914,17 +1067,22 @@ export function useInspectionData() {
     redOnTime,
     redOffTime,
     location,
+    lineNumber,
     submitting,
+    status,
     setTrainNumber,
     setTrainName,
     setRedOnTime,
     setRedOffTime,
     setLocation,
+    setLineNumber,
     checkExistingDraftReport,
     loadExistingReport,
     toggleSection,
     handleCheckStatusChange,
     handleRemarksChange,
-    submitReport
+    submitReport,
+    ensureAllActivitiesHaveResults,
+    initializeActivityResults
   };
 }

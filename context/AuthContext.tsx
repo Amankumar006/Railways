@@ -5,6 +5,7 @@ import { Platform, Alert } from 'react-native';
 import { supabase, auth as supabaseAuth } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
@@ -417,43 +418,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signup = async (email: string, password: string, userData: Partial<User>) => {
-    console.log('AuthContext signup called with:', email, 'userData:', JSON.stringify(userData));
+    if (__DEV__) {
+      console.log('AuthContext signup called with:', email, 'userData:', JSON.stringify(userData));
+    }
     
     // Set loading state immediately
     safeSetState({ loading: true, error: null });
-    console.log('Setting loading state to true');
     
     try {
       // Basic validation
       if (!email || !email.includes('@')) {
-        console.error('Invalid email format');
         throw new Error('Please enter a valid email address');
       }
       
       if (!password || password.length < 6) {
-        console.error('Password too short');
         throw new Error('Password must be at least 6 characters');
       }
       
-      // Check if a profile with this email already exists
-      console.log('Checking if profile exists with email:', email);
-      const { data: existingProfiles, error: existingProfileError } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email)
-        .limit(1);
-        
-      if (existingProfileError) {
-        console.error('Error checking existing profiles:', existingProfileError);
-      } else if (existingProfiles && existingProfiles.length > 0) {
-        console.log('User already exists in profiles:', existingProfiles);
-        throw new Error('A user with this email already exists');
-      }
-      
-      console.log('No existing user found, proceeding with signup');
-      
-      // Create the auth user
-      console.log('Creating auth user with email:', email);
+      // Step 1: Create auth user
+      if (__DEV__) console.log('Creating auth user...');
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -466,154 +449,84 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       
       if (error) {
-        console.error('Signup auth error:', error);
         throw error;
       }
       
-      console.log('Auth signup response:', JSON.stringify(data));
-      
       if (!data?.user) {
-        console.error('No user data returned from signup');
         throw new Error('User registration failed');
       }
+
+      // Step 2: Create user profile
+      if (__DEV__) console.log('Creating user profile...');
+      const profileData = {
+        id: data.user.id,
+        name: userData.name || 'New User',
+        email,
+        role: userData.role || 'inspector',
+        department: userData.department || undefined,
+        phone: userData.phone || undefined,
+        approval_status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
       
-      console.log('Creating profile for user ID:', data.user.id);
-      
-      // First check if a profile already exists for this user ID
-      console.log('Checking if profile already exists for user ID:', data.user.id);
-      const { data: existingProfile, error: profileByIdError } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('id', data.user.id)
-        .maybeSingle();
-        
-      if (profileByIdError) {
-        console.error('Error checking existing profile by ID:', profileByIdError);
+        .upsert(profileData, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        });
+      
+      if (profileError) {
+        // If profile creation fails, attempt to clean up auth user
+        try {
+          await supabase.auth.signOut();
+        } catch (cleanupError) {
+          if (__DEV__) console.error('Cleanup error:', cleanupError);
+        }
+        throw new Error('Account creation failed: ' + profileError.message);
       }
       
-      // If profile already exists, update it instead of creating a new one
-      if (existingProfile) {
-        console.log('Profile already exists, updating instead of creating');
-        
-        const profileData = {
-          name: userData.name || 'New User',
-          email,
-          role: userData.role || 'inspector',
-          department: userData.department || null,
-          phone: userData.phone || null,
-          approval_status: 'pending',
-          updated_at: new Date().toISOString()
-        };
-        
-        console.log('Updating profile data:', JSON.stringify(profileData));
-        
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update(profileData)
-          .eq('id', data.user.id);
-          
-        if (updateError) {
-          console.error('Profile update error:', updateError);
-          throw new Error('Account created but profile update failed: ' + updateError.message);
-        }
-      } else {
-        // Create user profile in profiles table if it doesn't exist
-        const profileData = {
-          id: data.user.id,
-          name: userData.name || 'New User',
-          email,
-          role: userData.role || 'inspector',
-          department: userData.department || null,
-          phone: userData.phone || null,
-          approval_status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        console.log('Inserting profile data:', JSON.stringify(profileData));
-        
-        // Add a small delay before creating the profile to ensure auth is complete
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert(profileData);
-        
-        if (profileError) {
-          console.error('Profile creation error:', profileError);
-          
-          // Try to get more details about the error
-          console.log('Error details:', JSON.stringify(profileError));
-          
-          // If the error is duplicate key, the profile might have been created by a trigger
-          if (profileError.code === '23505') {
-            console.log('Duplicate key detected, profile might have been created by a trigger');
-            
-            // Try to update the profile instead
-            const updateData = {
-              name: userData.name || 'New User',
-              email,
-              role: userData.role || 'inspector',
-              department: userData.department || null,
-              phone: userData.phone || null,
-              approval_status: 'pending',
-              updated_at: new Date().toISOString()
-            };
-            
-            console.log('Trying to update profile instead:', JSON.stringify(updateData));
-            
-            const { error: updateError } = await supabase
-              .from('profiles')
-              .update(updateData)
-              .eq('id', data.user.id);
-              
-            if (updateError) {
-              console.error('Profile update error:', updateError);
-              throw new Error('Account created but profile update failed: ' + updateError.message);
-            }
-          } else if (profileError.message && profileError.message.includes('permission denied')) {
-            console.log('Permission denied error detected, trying alternative approach');
-            throw new Error('Account created but profile setup failed due to permission denied: ' + profileError.message);
-          } else {
-            throw new Error('Account created but profile setup failed: ' + profileError.message);
-          }
-        }
-      }
+      // Step 3: Sign out user since they need approval
+      if (__DEV__) console.log('Signing out user for approval process...');
+      await supabase.auth.signOut();
       
-      console.log('Profile created successfully with pending status');
-      
-      // Set state to indicate successful signup with pending approval
-      safeSetState({ 
-        loading: false, 
+      // Step 4: Update state to indicate successful signup with pending approval
+      const finalState = {
+        loading: false,
         error: null,
-        pendingApproval: true
-      });
+        pendingApproval: true,
+        isAuthenticated: false,
+        user: {
+          ...profileData,
+          id: data.user.id,
+        },
+        token: null
+      };
       
-      // Show success message with approval information
-      Alert.alert(
-        'Signup Successful',
-        'Your account has been created and is pending approval from a manager. You will be notified when your account is approved.',
-        [{ 
-          text: 'OK',
-          onPress: () => {
-            // Navigate to the login screen after user acknowledges
-            router.push('/(auth)/login');
-          }
-        }]
-      );
+      if (__DEV__) console.log('Setting final state:', finalState);
+      safeSetState(finalState);
+      
     } catch (error: any) {
-      console.error('Signup error:', error);
+      if (__DEV__) console.error('Signup error:', error);
+      
+      // Ensure we're signed out in case of error
+      try {
+        await supabase.auth.signOut();
+      } catch (signOutError) {
+        if (__DEV__) console.error('Error signing out after failure:', signOutError);
+      }
+      
       safeSetState({
         loading: false,
         error: error.message || 'Signup failed',
+        isAuthenticated: false,
+        user: null,
+        token: null,
+        pendingApproval: false
       });
       
-      // Show error alert
-      Alert.alert(
-        'Signup Failed',
-        error.message || 'An unexpected error occurred during signup',
-        [{ text: 'OK' }]
-      );
+      throw error;
     }
   };
 
@@ -652,34 +565,104 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
   
   const logout = async () => {
+    // Immediately set loading state
     safeSetState({ loading: true });
     
     try {
-      // First, clear local state regardless of server response
-      // This ensures the user is logged out on the client side even if server logout fails
-      if (Platform.OS !== 'web') {
-        try {
-          await SecureStore.deleteItemAsync('supabase-auth-token');
-        } catch (storageError) {
-          console.error('Error clearing secure storage:', storageError);
-          // Continue with logout even if storage clearing fails
-        }
+      console.log('Starting logout process...');
+      
+      // For web platform, handle logout specially
+      if (Platform.OS === 'web') {
+        // Set user as logged out immediately to prevent UI issues
+        safeSetState({
+          isAuthenticated: false,
+          user: null,
+          token: null,
+          loading: false,
+          error: null,
+          pendingApproval: false
+        });
+        
+        // Get the Supabase URL for key generation
+        const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl as string;
+        
+        // First navigate to login screen
+        console.log('Navigating to login screen first...');
+        router.replace('/(auth)/login');
+        
+        // Then perform logout operations asynchronously
+        setTimeout(async () => {
+          try {
+            // Sign out from Supabase
+            console.log('Calling Supabase signOut after navigation...');
+            await supabase.auth.signOut({ scope: 'global' });
+            
+            // Clear all localStorage manually
+            console.log('Clearing localStorage...');
+            const supabaseKeys = [];
+            
+            // Find all auth-related keys
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (!key) continue;
+              
+              if (key.startsWith('sb-') || 
+                  key.includes('supabase') || 
+                  key.includes('auth') ||
+                  (supabaseUrl && key.includes(supabaseUrl.split('//')[1]?.split('.')[0] || ''))) {
+                supabaseKeys.push(key);
+              }
+            }
+            
+            // Remove all found keys
+            supabaseKeys.forEach(key => {
+              try {
+                localStorage.removeItem(key);
+                console.log(`Removed localStorage key: ${key}`);
+              } catch (e) {
+                console.warn(`Failed to remove key: ${key}`, e);
+              }
+            });
+            
+            // Force refresh page after a delay
+            setTimeout(() => {
+              if (typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            }, 300);
+          } catch (innerError) {
+            console.error('Error in delayed logout tasks:', innerError);
+            // Force refresh the page even if there's an error
+            if (typeof window !== 'undefined') {
+              window.location.reload();
+            }
+          }
+        }, 200);
+        
+        // Return early for web to prevent further processing
+        return;
       }
       
-      // Try to sign out from Supabase
+      // For mobile platforms, continue with the existing flow
       try {
-        // Use local signout (not global) to avoid 403 errors
+        // Step 1: Sign out from Supabase
         const { error } = await supabase.auth.signOut({ scope: 'local' });
         if (error) {
           console.warn('Supabase signout error:', error);
-          // Continue with local logout even if server logout fails
         }
       } catch (signOutError) {
-        console.warn('Error during signout:', signOutError);
-        // Continue with local logout even if server logout fails
+        console.warn('Error during supabase signout:', signOutError);
       }
       
-      // Always update state to logged out, regardless of server response
+      // Step 2: Clear mobile secure storage
+      try {
+        await SecureStore.deleteItemAsync('supabase-auth-token');
+        console.log('Cleared SecureStore auth token');
+      } catch (storageError) {
+        console.error('Error clearing secure storage:', storageError);
+      }
+      
+      // Step 3: Update state to logged out
       safeSetState({
         isAuthenticated: false,
         user: null,
@@ -689,8 +672,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         pendingApproval: false
       });
       
-      // Navigate to login screen
-      router.replace('/(auth)/login');
+      console.log('Auth state cleared, navigating to login');
+      
+      // Step 4: Navigate to login screen
+      setTimeout(() => {
+        router.replace('/(auth)/login');
+      }, 100);
+      
     } catch (error: any) {
       console.error('Logout error:', error);
       
@@ -706,6 +694,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Navigate to login screen
       router.replace('/(auth)/login');
+      
+      // For web, force reload even on error
+      if (Platform.OS === 'web') {
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            window.location.reload();
+          }
+        }, 500);
+      }
     }
   };
 
@@ -732,3 +729,5 @@ export const useAuth = () => {
   }
   return context;
 };
+
+export default AuthProvider;

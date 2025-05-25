@@ -48,8 +48,21 @@ A mobile application built with React Native/Expo and TypeScript for Indian Rail
 
 1. Clone the repository
 2. Install dependencies: `npm install`
-3. Set up environment variables for Supabase
+3. **Set up environment variables for Supabase** (IMPORTANT - Required to fix 404 login errors):
+   - Create a `.env` file in the root directory
+   - Add your Supabase credentials:
+     ```
+     EXPO_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+     EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+     ```
+   - Get these values from your Supabase dashboard: Settings > API
+   - See `SETUP_INSTRUCTIONS.md` for detailed steps
 4. Run the development server: `npx expo start`
+
+## Common Issues
+
+### 404 Error During Login
+If you're getting a 404 error when trying to log in, it's because the Supabase environment variables are not configured. Follow step 3 above to fix this issue.
 
 ## Required Assets
 

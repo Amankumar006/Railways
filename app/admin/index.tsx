@@ -286,17 +286,35 @@ export default function AdminDashboard() {
             </TouchableOpacity>
           </Link>
           
-          <TouchableOpacity style={styles.quickActionCard}>
-            <View style={styles.quickActionIcon}>
-              <Users size={24} color={colors.primary[500]} />
-            </View>
-            <StyledText size="md" weight="bold" style={styles.quickActionTitle}>
-              User Management
-            </StyledText>
-            <StyledText size="sm" color={colors.neutral[600]} style={styles.quickActionDesc}>
-              Manage all system users
-            </StyledText>
-          </TouchableOpacity>
+          <Link href="/(auth)/login" asChild>
+            <TouchableOpacity style={styles.backButton}>
+              <StyledText size="md" color={colors.primary[600]}>
+                ← Back to Login
+              </StyledText>
+            </TouchableOpacity>
+          </Link>
+
+          <Link 
+            href="manage-users" 
+            asChild
+            onPress={() => {
+              console.log('Navigating to manage-users');
+            }}
+          >
+            <TouchableOpacity 
+              style={styles.quickActionCard}
+            >
+              <View style={styles.quickActionIcon}>
+                <Users size={24} color={colors.primary[500]} />
+              </View>
+              <StyledText size="md" weight="bold" style={styles.quickActionTitle}>
+                User Management
+              </StyledText>
+              <StyledText size="sm" color={colors.neutral[600]} style={styles.quickActionDesc}>
+                Manage all system users
+              </StyledText>
+            </TouchableOpacity>
+          </Link>
           
           <TouchableOpacity style={styles.quickActionCard}>
             <View style={styles.quickActionIcon}>
@@ -592,5 +610,14 @@ const styles = StyleSheet.create({
   activeRoleButton: {
     backgroundColor: colors.primary[500],
     borderColor: colors.primary[500],
+  },
+  backButton: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.primary[500],
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

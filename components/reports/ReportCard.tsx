@@ -5,6 +5,7 @@ import { StyledText, Card, Button, Badge } from '@/components/themed';
 import { useTheme } from '@/hooks/useTheme';
 import { Ionicons } from '@expo/vector-icons';
 import { generateTripReport } from '@/utils/pdfGenerator';
+import { diagnosticTools } from '@/utils/diagnosticTools';
 
 interface ReportCardProps {
   report: {
@@ -24,6 +25,9 @@ interface ReportCardProps {
       unchecked: number;
     };
     trip_activity_results?: any[];
+    inspector?: {
+      name: string;
+    };
   };
   onDelete: (reportId: string) => Promise<void>;
   showInspectorName?: boolean;
@@ -104,115 +108,125 @@ export const ReportCard: React.FC<ReportCardProps> = ({
     );
   };
 
+  // Diagnostic tool for troubleshooting
+  const handleDiagnose = async () => {
+    await diagnosticTools.showAdvancedDiagnosticAlert(report.id);
+  };
+
   return (
-    <Card style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.titleContainer}>
-          <StyledText style={styles.trainNumber}>
-            {report.train_number || 'Unknown Train'}
-          </StyledText>
-          {report.train_name && (
-            <StyledText style={styles.trainName}>
-              {report.train_name}
-            </StyledText>
+    <Card style={styles.container}>
+      <TouchableOpacity 
+        style={styles.cardContent}
+        onPress={handleViewReport}
+        activeOpacity={0.8}
+      >
+        {/* Content details */}
+        <View style={styles.header}>
+          <View style={styles.headerInfo}>
+            <StyledText style={styles.trainNumber}>Train {report.train_number}</StyledText>
+            {report.train_name && (
+              <StyledText style={styles.trainName}>{report.train_name}</StyledText>
+            )}
+            <Badge 
+              text={getStatusText(report.status)} 
+              variant={getStatusColor(report.status)}
+              size="sm"
+            />
+          </View>
+          <Ionicons 
+            name="chevron-forward" 
+            size={20} 
+            color={colors.text}
+          />
+        </View>
+        
+        {/* Location and date */}
+        <View style={styles.details}>
+          <View style={styles.detailItem}>
+            <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
+            <StyledText style={styles.detailText}>{report.location}</StyledText>
+          </View>
+          <View style={styles.detailItem}>
+            <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+            <StyledText style={styles.detailText}>{report.date}</StyledText>
+          </View>
+          {report.submitted_at && (
+            <View style={styles.detailItem}>
+              <Ionicons name="checkmark-circle-outline" size={16} color={colors.textSecondary} />
+              <StyledText style={styles.detailText}>Submitted: {report.submitted_at}</StyledText>
+            </View>
+          )}
+          {showInspectorName && report.inspector && (
+            <View style={styles.detailItem}>
+              <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
+              <StyledText style={styles.detailText}>Inspector: {report.inspector.name}</StyledText>
+            </View>
           )}
         </View>
-        <Badge
-          text={getStatusText(report.status)}
-          variant={getStatusColor(report.status)}
-        />
-      </View>
-
-      <View style={styles.detailsContainer}>
-        <View style={styles.detailRow}>
-          <Ionicons name="calendar-outline" size={16} color="#555555" />
-          <StyledText style={styles.detailText}>{report.date}</StyledText>
-        </View>
         
-        <View style={styles.detailRow}>
-          <Ionicons name="location-outline" size={16} color="#555555" />
-          <StyledText style={styles.detailText}>{report.location}</StyledText>
-        </View>
-        
-        {showInspectorName && report.inspector_id && (
-          <View style={styles.detailRow}>
-            <Ionicons name="person-outline" size={16} color="#555555" />
-            <StyledText style={styles.detailText}>Inspector ID: {report.inspector_id}</StyledText>
-          </View>
-        )}
-        
-        {report.submitted_at && (
-          <View style={styles.detailRow}>
-            <Ionicons name="checkmark-circle-outline" size={16} color="#555555" />
-            <StyledText style={styles.detailText}>
-              Submitted: {report.submitted_at}
-            </StyledText>
-          </View>
-        )}
-        
+        {/* Progress statistics */}
         {report.stats && (
-          <View style={styles.statsContainer}>
-            <StyledText style={styles.statsTitle}>Inspection Status:</StyledText>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <StyledText style={[styles.statValue, {color: '#4caf50'}]}>{report.stats.checked_okay}</StyledText>
-                <StyledText style={styles.statLabel}>OK</StyledText>
-              </View>
-              <View style={styles.statItem}>
-                <StyledText style={[styles.statValue, {color: '#f44336'}]}>{report.stats.checked_not_okay}</StyledText>
-                <StyledText style={styles.statLabel}>Not OK</StyledText>
-              </View>
-              <View style={styles.statItem}>
-                <StyledText style={[styles.statValue, {color: '#9e9e9e'}]}>{report.stats.unchecked}</StyledText>
-                <StyledText style={styles.statLabel}>Pending</StyledText>
-              </View>
-              <View style={styles.statItem}>
-                <StyledText style={[styles.statValue, {color: '#2196f3'}]}>{report.stats.total_activities}</StyledText>
-                <StyledText style={styles.statLabel}>Total</StyledText>
-              </View>
+          <View style={styles.stats}>
+            <View style={styles.statItem}>
+              <StyledText style={styles.statValue}>{report.stats.checked_okay}</StyledText>
+              <StyledText style={styles.statLabel}>OK</StyledText>
+            </View>
+            <View style={styles.statItem}>
+              <StyledText style={styles.statValue}>{report.stats.checked_not_okay}</StyledText>
+              <StyledText style={styles.statLabel}>Not OK</StyledText>
+            </View>
+            <View style={styles.statItem}>
+              <StyledText style={styles.statValue}>{report.stats.unchecked}</StyledText>
+              <StyledText style={styles.statLabel}>Pending</StyledText>
+            </View>
+            <View style={styles.statItem}>
+              <StyledText style={styles.statValue}>{report.stats.total_activities}</StyledText>
+              <StyledText style={styles.statLabel}>Total</StyledText>
             </View>
           </View>
         )}
-      </View>
-
-      <View style={styles.actionsContainer}>
-        <Button
-          title="View"
-          size="sm"
-          onPress={handleViewReport}
-          icon={<Ionicons name="eye-outline" size={16} color={colors.white} />}
-          style={styles.actionButton}
-        />
-        
+      </TouchableOpacity>
+      
+      {/* Actions */}
+      <View style={styles.actions}>
         <Button
           title="PDF"
           size="sm"
           variant="outline"
+          icon={<Ionicons name="document-text-outline" size={16} color="#0077CC" />}
           onPress={handleGeneratePdf}
-          icon={<Ionicons name="document-outline" size={16} color="#0056b3" />}
           style={styles.actionButton}
         />
-        
-        {report.status === 'draft' && (
-          <Button
-            title="Delete"
-            size="sm"
-            variant="outline"
-            onPress={handleDeleteReport}
-            icon={<Ionicons name="trash-outline" size={16} color="#d32f2f" />}
-            style={styles.actionButton}
-            textStyle={{ color: '#d32f2f' }}
-          />
-        )}
+        <Button
+          title="Diagnose"
+          size="sm"
+          variant="outline"
+          icon={<Ionicons name="medkit-outline" size={16} color="#F59E0B" />}
+          onPress={handleDiagnose}
+          style={styles.actionButton}
+        />
+        <Button
+          title="Delete"
+          size="sm"
+          variant="outline"
+          icon={<Ionicons name="trash-outline" size={16} color="#EF4444" />}
+          onPress={handleDeleteReport}
+          style={styles.actionButton}
+        />
       </View>
     </Card>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
+  container: {
     marginBottom: 16,
     padding: 16,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -220,7 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  titleContainer: {
+  headerInfo: {
     flex: 1,
   },
   trainNumber: {
@@ -231,10 +245,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.8,
   },
-  detailsContainer: {
+  details: {
     marginBottom: 16,
   },
-  detailRow: {
+  detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
@@ -243,21 +257,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
   },
-  statsContainer: {
+  stats: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
-  },
-  statsTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
   },
   statItem: {
     alignItems: 'center',
@@ -273,7 +277,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  actionsContainer: {
+  actions: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
   },

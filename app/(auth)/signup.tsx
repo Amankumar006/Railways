@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
@@ -23,6 +23,7 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [department, setDepartment] = useState('');
   const [phone, setPhone] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form validation errors
   const [nameError, setNameError] = useState('');
@@ -78,7 +79,9 @@ export default function SignupScreen() {
     }
   };
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
+    if (isSubmitting) return; // Prevent multiple submissions
+    
     console.log('Signup button clicked');
     const isNameValid = validateName(name);
     const isEmailValid = validateEmail(email);
@@ -88,58 +91,89 @@ export default function SignupScreen() {
     console.log('Validation results:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
 
     if (isNameValid && isEmailValid && isPasswordValid && isConfirmPasswordValid) {
-      // Show approval information before signing up
-      Alert.alert(
-        'Approval Required',
-        'After signing up, your account will require approval from a manager before you can use the app. This typically takes 1-2 business days.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Continue', 
-            onPress: () => {
-              console.log('Continue pressed, calling signup with:', email);
-              // Create the user data object
-              const userData = {
-                name,
-                email,
-                role: 'inspector' as UserRole,
-                department: department || undefined,
-                phone: phone || undefined,
-              };
-              
-              console.log('User data for signup:', userData);
-              
-              try {
-                // Call the signup function from AuthContext
-                signup(email, password, userData);
-                console.log('Signup function called successfully');
-              } catch (error) {
-                console.error('Error calling signup function:', error);
-                Alert.alert(
-                  'Signup Error',
-                  'An error occurred while trying to sign up. Please try again.',
-                  [{ text: 'OK' }]
-                );
+      setIsSubmitting(true);
+      try {
+        // Create the user data object
+        const userData = {
+          name,
+          email,
+          role: 'inspector' as UserRole,
+          department: department || undefined,
+          phone: phone || undefined,
+        };
+        
+        // Call the signup function from AuthContext
+        await signup(email, password, userData);
+        
+        // Set submitting to false
+        setIsSubmitting(false);
+        
+        // Platform-specific approach for success message and navigation
+        if (Platform.OS === 'web') {
+          // For web, just redirect immediately and avoid Alert which doesn't work well
+          console.log('Web platform detected, redirecting to pending approval page');
+          router.replace('/(auth)/pending-approval');
+        } else {
+          // For mobile platforms, use React Native Alert
+          Alert.alert(
+            'Signup Successful',
+            'Your account has been created and is pending approval from a manager. You will be notified when your account is approved.',
+            [{ 
+              text: 'OK',
+              onPress: () => {
+                router.replace('/(auth)/pending-approval');
               }
-            }
-          }
-        ]
-      );
+            }]
+          );
+        }
+      } catch (error: any) {
+        console.error('Error in signup process:', error);
+        setIsSubmitting(false);
+        
+        // Platform-specific error handling
+        if (Platform.OS === 'web') {
+          // For web, use browser alert
+          window.alert(error.message || 'An unexpected error occurred. Please try again.');
+        } else {
+          // For mobile, use React Native Alert
+          Alert.alert(
+            'Signup Error',
+            error.message || 'An unexpected error occurred. Please try again.',
+            [{ text: 'OK' }]
+          );
+        }
+      }
     } else {
       console.log('Validation failed:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
-      Alert.alert(
-        'Validation Error',
-        'Please correct the errors in the form.',
-        [{ text: 'OK' }]
-      );
+      
+      // Platform-specific validation error handling
+      if (Platform.OS === 'web') {
+        // For web, use browser alert
+        window.alert('Please correct the errors in the form.');
+      } else {
+        // For mobile, use React Native Alert
+        Alert.alert(
+          'Validation Error',
+          'Please correct the errors in the form.',
+          [{ text: 'OK' }]
+        );
+      }
     }
   };
-  
-  // No helper functions needed - AuthContext handles all state management
+
+  // Show loading state
+  if (loading || isSubmitting) {
+    return (
+      <StyledView style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <StyledText style={{ marginTop: 16 }}>Creating your account...</StyledText>
+      </StyledView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView 
-      style={styles.container}
+      style={[styles.container, { pointerEvents: loading || isSubmitting ? 'none' : 'auto' }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={50}
     >
@@ -151,10 +185,10 @@ export default function SignupScreen() {
           style={styles.headerImageContainer}
           entering={FadeInDown.duration(800).delay(200)}
         >
-          <Image 
-            source={require('@/assets/images/indian-railway-bg.png')} 
+          <Image
+            source={require('../../assets/images/indian-railway-bg.png')}
             style={styles.backgroundImage}
-            blurRadius={1}
+            resizeMode="cover"
           />
           <StyledView style={styles.logoOverlay} backgroundColor="transparent">
             <StyledText size="3xl" weight="bold" color={colors.white} style={styles.logoText}>
@@ -280,10 +314,11 @@ export default function SignupScreen() {
           <Button
             title="Sign Up"
             onPress={handleSignup}
-            loading={loading}
+            loading={loading || isSubmitting}
             fullWidth
             size="lg"
             style={styles.signupButton}
+            disabled={loading || isSubmitting}
           />
           
           <View style={styles.loginContainer}>
@@ -393,5 +428,9 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     paddingHorizontal: 4,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

@@ -18,6 +18,7 @@ interface DatabaseTripReport {
   train_number: string;
   train_name: string;
   location: string;
+  line_no: string;
   date: string;
   red_on_time: string;
   red_off_time: string;
@@ -78,6 +79,7 @@ export async function fetchTripReportData(reportId: string): Promise<TripReport 
         train_number,
         train_name,
         location,
+        line_no,
         date,
         red_on_time,
         red_off_time,

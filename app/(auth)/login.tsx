@@ -79,10 +79,10 @@ export default function LoginScreen() {
           style={styles.logoContainer}
           entering={FadeInDown.duration(800).delay(200)}
         >
-          <Image 
-            source={require('@/assets/images/indian-railway-bg.png')} 
+          <Image
+            source={require('../../assets/images/indian-railway-bg.png')}
             style={styles.backgroundImage}
-            blurRadius={1}
+            resizeMode="cover"
           />
           <StyledView style={styles.logoOverlay} backgroundColor="transparent">
             <StyledText size="4xl" weight="bold" color={colors.white} style={styles.logoText}>

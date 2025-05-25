@@ -75,13 +75,13 @@ export function generateReportTemplate(reportData: any, options: ReportTemplateO
         <tr>
           <th>Location:</th>
           <td>${reportData.location || ''}</td>
-          <th>Report ID:</th>
-          <td>${reportData.id || ''}</td>
+          <th>Line No.:</th>
+          <td>${reportData.line_no || ''}</td>
         </tr>
         <tr>
-          <th>RED On Time:</th>
+          <th>Red On Time:</th>
           <td>${formatTime(reportData.red_on_time) || 'N/A'}</td>
-          <th>RED Off Time:</th>
+          <th>Red Off Time:</th>
           <td>${formatTime(reportData.red_off_time) || 'N/A'}</td>
         </tr>
         <tr>
