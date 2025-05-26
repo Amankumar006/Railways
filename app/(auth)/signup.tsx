@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
@@ -11,10 +11,12 @@ import { colors } from '@/constants/Colors';
 import { ROUTES } from '@/constants/Routes';
 import { UserRole } from '@/types';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { showError } from '@/utils/errorHandler';
+import { logDebug, logError } from '@/utils/logger';
 
 export default function SignupScreen() {
   const router = useRouter();
-  const { signup, loading, error } = useAuth();
+  const { signup, loading, error, pendingApproval } = useAuth();
 
   // Form state
   const [name, setName] = useState('');
@@ -79,16 +81,24 @@ export default function SignupScreen() {
     }
   };
 
+  // Handle pendingApproval state change
+  useEffect(() => {
+    if (pendingApproval && !loading && !isSubmitting) {
+      logDebug('Pending approval detected, navigating to pending approval page');
+      router.replace('/(auth)/pending-approval');
+    }
+  }, [pendingApproval, loading, isSubmitting, router]);
+
   const handleSignup = async () => {
     if (isSubmitting) return; // Prevent multiple submissions
     
-    console.log('Signup button clicked');
+    logDebug('Signup button clicked');
     const isNameValid = validateName(name);
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
     const isConfirmPasswordValid = validateConfirmPassword(confirmPassword);
 
-    console.log('Validation results:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
+    logDebug('Validation results:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
 
     if (isNameValid && isEmailValid && isPasswordValid && isConfirmPasswordValid) {
       setIsSubmitting(true);
@@ -108,56 +118,27 @@ export default function SignupScreen() {
         // Set submitting to false
         setIsSubmitting(false);
         
-        // Platform-specific approach for success message and navigation
-        if (Platform.OS === 'web') {
-          // For web, just redirect immediately and avoid Alert which doesn't work well
-          console.log('Web platform detected, redirecting to pending approval page');
-          router.replace('/(auth)/pending-approval');
-        } else {
-          // For mobile platforms, use React Native Alert
-          Alert.alert(
-            'Signup Successful',
-            'Your account has been created and is pending approval from a manager. You will be notified when your account is approved.',
-            [{ 
-              text: 'OK',
-              onPress: () => {
-                router.replace('/(auth)/pending-approval');
-              }
-            }]
-          );
-        }
+        // Navigate to pending approval page
+        logDebug('Signup successful, redirecting to pending approval page');
+        router.replace('/(auth)/pending-approval');
       } catch (error: any) {
-        console.error('Error in signup process:', error);
+        logError('Error in signup process:', error);
         setIsSubmitting(false);
         
-        // Platform-specific error handling
-        if (Platform.OS === 'web') {
-          // For web, use browser alert
-          window.alert(error.message || 'An unexpected error occurred. Please try again.');
-        } else {
-          // For mobile, use React Native Alert
-          Alert.alert(
-            'Signup Error',
-            error.message || 'An unexpected error occurred. Please try again.',
-            [{ text: 'OK' }]
-          );
-        }
+        // Use our error handler for cross-platform compatibility
+        showError({ 
+          title: 'Signup Error',
+          message: error.message || 'An unexpected error occurred. Please try again.'
+        });
       }
     } else {
-      console.log('Validation failed:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
+      logDebug('Validation failed:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
       
-      // Platform-specific validation error handling
-      if (Platform.OS === 'web') {
-        // For web, use browser alert
-        window.alert('Please correct the errors in the form.');
-      } else {
-        // For mobile, use React Native Alert
-        Alert.alert(
-          'Validation Error',
-          'Please correct the errors in the form.',
-          [{ text: 'OK' }]
-        );
-      }
+      // Use our error handler for cross-platform compatibility
+      showError({ 
+        title: 'Validation Error',
+        message: 'Please correct the errors in the form.'
+      });
     }
   };
 
@@ -369,12 +350,14 @@ const styles = StyleSheet.create({
     tintColor: colors.white,
   },
   logoText: {
+    // @ts-ignore - textShadow properties work but TypeScript types are outdated
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 5,
   },
   logoSubText: {
     marginTop: 4,
+    // @ts-ignore - textShadow properties work but TypeScript types are outdated
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 5,

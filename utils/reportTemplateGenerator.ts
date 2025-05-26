@@ -7,6 +7,8 @@ interface ReportTemplateOptions {
   includeHeader?: boolean;
   includeFooter?: boolean;
   includeStyles?: boolean;
+  includeQRCode?: boolean;
+  customTemplate?: boolean;
 }
 
 /**
@@ -76,7 +78,7 @@ export function generateReportTemplate(reportData: any, options: ReportTemplateO
           <th>Location:</th>
           <td>${reportData.location || ''}</td>
           <th>Line No.:</th>
-          <td>${reportData.line_no || ''}</td>
+          <td>${reportData.line_number || ''}</td>
         </tr>
         <tr>
           <th>Red On Time:</th>

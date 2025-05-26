@@ -39,7 +39,7 @@ export interface TripReport {
   train_number: string;
   train_name?: string;
   location: string;
-  line_no: string;
+  line_number?: string;
   date: string;
   red_on_time?: string;
   red_off_time?: string;

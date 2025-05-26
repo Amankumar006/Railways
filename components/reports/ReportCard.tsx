@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StyledText, Card, Button, Badge } from '@/components/themed';
 import { useTheme } from '@/hooks/useTheme';
 import { Ionicons } from '@expo/vector-icons';
 import { generateTripReport } from '@/utils/pdfGenerator';
-import { diagnosticTools } from '@/utils/diagnosticTools';
+import { logError } from '@/utils/logger';
+import { showError, showSuccess, showConfirmation } from '@/utils/errorHandler';
+
 
 interface ReportCardProps {
   report: {
@@ -77,41 +79,29 @@ export const ReportCard: React.FC<ReportCardProps> = ({
     try {
       await generateTripReport(report.id);
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      Alert.alert('Error', 'Failed to generate PDF. Please try again.');
+      logError('Error generating PDF:', error);
+      showError({ message: 'Failed to generate PDF. Please try again.' });
     }
   };
 
   const handleDeleteReport = () => {
-    Alert.alert(
-      'Delete Report',
+    showConfirmation(
       'Are you sure you want to delete this report? This action cannot be undone.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await onDelete(report.id);
-              Alert.alert('Success', 'Report deleted successfully');
-            } catch (error) {
-              console.error('Error deleting report:', error);
-              Alert.alert('Error', 'Failed to delete report. Please try again.');
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          await onDelete(report.id);
+          showSuccess('Report deleted successfully');
+        } catch (error) {
+          logError('Error deleting report:', error);
+          showError({ message: 'Failed to delete report. Please try again.' });
+        }
+      },
+      undefined,
+      'Delete Report'
     );
   };
 
-  // Diagnostic tool for troubleshooting
-  const handleDiagnose = async () => {
-    await diagnosticTools.showAdvancedDiagnosticAlert(report.id);
-  };
+
 
   return (
     <Card style={styles.container}>
@@ -197,14 +187,7 @@ export const ReportCard: React.FC<ReportCardProps> = ({
           onPress={handleGeneratePdf}
           style={styles.actionButton}
         />
-        <Button
-          title="Diagnose"
-          size="sm"
-          variant="outline"
-          icon={<Ionicons name="medkit-outline" size={16} color="#F59E0B" />}
-          onPress={handleDiagnose}
-          style={styles.actionButton}
-        />
+
         <Button
           title="Delete"
           size="sm"

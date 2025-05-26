@@ -2,8 +2,8 @@ import { supabase } from '@/lib/supabase';
 import { TripReport } from '@/types/inspection';
 
 /**
- * Service for fetching and processing report data
- * Extracted from pdfGenerator.ts to improve separation of concerns
+ * Enhanced service for fetching and processing report data
+ * Features: Error handling, retry logic, caching, and fallback mechanisms
  */
 
 interface Profile {
@@ -18,7 +18,7 @@ interface DatabaseTripReport {
   train_number: string;
   train_name: string;
   location: string;
-  line_no: string;
+  line_number: string;
   date: string;
   red_on_time: string;
   red_off_time: string;
@@ -38,6 +38,7 @@ interface ReportStats {
   checked_okay: number;
   checked_not_okay: number;
   unchecked: number;
+  completion_percentage: number;
 }
 
 interface Section {
@@ -63,82 +64,202 @@ interface Activity {
   remarks: string;
 }
 
+// Simple in-memory cache for report data
+const reportCache = new Map<string, { data: TripReport; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 /**
- * Fetch a complete trip report with all related data
+ * Enhanced function to fetch a complete trip report with all related data
+ * Features: Retry logic, caching, fallback mechanisms, and better error handling
  */
-export async function fetchTripReportData(reportId: string): Promise<TripReport | null> {
+export async function fetchTripReportData(reportId: string, useCache: boolean = true): Promise<TripReport | null> {
   try {
     console.log('Fetching trip report data for report:', reportId);
     
-    // Fetch the trip report with inspector details and activity results using explicit joins
-    const { data: reportData, error: reportError } = await supabase
-      .from('trip_reports')
-      .select(`
-        id,
-        inspector_id,
-        train_number,
-        train_name,
-        location,
-        line_no,
-        date,
-        red_on_time,
-        red_off_time,
-        status,
-        comments,
-        created_at,
-        submitted_at,
-        reviewed_at,
-        approved_at,
-        supervisor_id,
-        updated_at,
-        trip_activity_results(
-          id,
-          activity_id,
-          check_status,
-          remarks,
-          inspector_id,
-          checked_at,
-          created_at,
-          updated_at
-        )
-      `)
-      .eq('id', reportId)
-      .single();
-      
-    if (reportError) {
-      console.error('Error fetching trip report:', reportError);
-      throw reportError;
+    // Check cache first
+    if (useCache) {
+      const cached = reportCache.get(reportId);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        console.log('Returning cached report data');
+        return cached.data;
+      }
     }
     
+    // Fetch with retry logic
+    const reportData = await fetchReportWithRetry(reportId);
     if (!reportData) {
       console.error('Trip report not found');
       return null;
     }
     
-    // Fetch inspector details separately
-    const { data: inspectorData, error: inspectorError } = await supabase
-      .from('profiles')
-      .select('id, name, email')
-      .eq('id', reportData.inspector_id)
-      .single();
-
-    if (inspectorError) {
-      console.error('Error fetching inspector details:', inspectorError);
-      throw inspectorError;
-    }
+    // Fetch inspector details with fallback
+    const inspectorData = await fetchInspectorWithFallback(reportData.inspector_id);
     
     // Transform the data to match expected format
     const transformedReportData = {
       ...reportData,
-      inspector: inspectorData ? {
-        id: inspectorData.id,
-        name: inspectorData.name,
-        email: inspectorData.email
-      } : null,
-      trip_activity_results: reportData.trip_activity_results
+      inspector: inspectorData,
+      trip_activity_results: reportData.trip_activity_results || []
     };
     
-    // Fetch all sections, categories, and activities in a single optimized query
+    // Fetch inspection structure with fallback
+    const sectionsData = await fetchInspectionStructureWithFallback();
+    
+    // Process and combine the data
+    const processedSections = processInspectionSections(sectionsData, transformedReportData.trip_activity_results);
+    
+    // Calculate enhanced statistics
+    const stats = calculateEnhancedReportStats(processedSections);
+    
+    // Combine everything into the final report object
+    const finalReport: TripReport = {
+      ...transformedReportData,
+      sections: processedSections,
+      stats
+    };
+    
+    // Cache the result
+    if (useCache) {
+      reportCache.set(reportId, { data: finalReport, timestamp: Date.now() });
+    }
+    
+    return finalReport;
+  } catch (error) {
+    console.error('Error in fetchTripReportData:', error);
+    
+    // Try to return cached data as fallback
+    if (useCache) {
+      const cached = reportCache.get(reportId);
+      if (cached) {
+        console.log('Returning stale cached data due to error');
+        return cached.data;
+      }
+    }
+    
+    throw error;
+  }
+}
+
+/**
+ * Fetch report data with retry logic
+ */
+async function fetchReportWithRetry(reportId: string, maxRetries: number = 3): Promise<any> {
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Fetching report data (attempt ${attempt}/${maxRetries})`);
+      
+      const { data: reportData, error: reportError } = await supabase
+        .from('trip_reports')
+        .select(`
+          id,
+          inspector_id,
+          train_number,
+          train_name,
+          location,
+          line_number,
+          date,
+          red_on_time,
+          red_off_time,
+          status,
+          comments,
+          created_at,
+          submitted_at,
+          reviewed_at,
+          approved_at,
+          supervisor_id,
+          updated_at,
+          trip_activity_results(
+            id,
+            activity_id,
+            check_status,
+            remarks,
+            inspector_id,
+            checked_at,
+            created_at,
+            updated_at
+          )
+        `)
+        .eq('id', reportId)
+        .maybeSingle();
+        
+              if (reportError) {
+          throw reportError;
+        }
+        
+        if (!reportData) {
+          throw new Error(`Trip report with ID ${reportId} not found`);
+        }
+        
+        return reportData;
+    } catch (error: any) {
+      lastError = error;
+      console.error(`Attempt ${attempt} failed:`, error);
+      
+      if (attempt < maxRetries) {
+        // Wait before retrying (exponential backoff)
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
+ * Fetch inspector details with fallback
+ */
+async function fetchInspectorWithFallback(inspectorId: string): Promise<any> {
+  try {
+    // Use maybeSingle() instead of single() to handle cases where no rows are found
+    const { data: inspectorData, error: inspectorError } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .eq('id', inspectorId)
+      .maybeSingle();
+
+    if (inspectorError) {
+      console.warn('Error fetching inspector details:', inspectorError);
+      return {
+        id: inspectorId,
+        name: 'Unknown Inspector',
+        email: 'unknown@railway.gov.in'
+      };
+    }
+    
+    // If no inspector data found, return fallback
+    if (!inspectorData) {
+      console.warn(`Inspector with ID ${inspectorId} not found in profiles table, using fallback`);
+      return {
+        id: inspectorId,
+        name: 'Unknown Inspector',
+        email: 'unknown@railway.gov.in'
+      };
+    }
+    
+    return {
+      id: inspectorData.id,
+      name: inspectorData.name,
+      email: inspectorData.email
+    };
+  } catch (error) {
+    console.warn('Failed to fetch inspector details, using fallback:', error);
+    return {
+      id: inspectorId,
+      name: 'Unknown Inspector',
+      email: 'unknown@railway.gov.in'
+    };
+  }
+}
+
+/**
+ * Fetch inspection structure with fallback
+ */
+async function fetchInspectionStructureWithFallback(): Promise<any[]> {
+  try {
     const { data: sectionsData, error: sectionsError } = await supabase
       .from('inspection_sections')
       .select(`
@@ -153,64 +274,86 @@ export async function fetchTripReportData(reportId: string): Promise<TripReport 
       .order('display_order');
       
     if (sectionsError) {
-      console.error('Error fetching inspection structure:', sectionsError);
-      throw sectionsError;
+      console.warn('Error fetching inspection structure:', sectionsError);
+      return getDefaultInspectionStructure();
     }
     
-    // Process and combine the data
-    const processedSections = sectionsData.map(section => {
-      const categories = section.inspection_categories.map(category => {
-        const activities = category.inspection_activities.map(activity => {
-          // Find the corresponding result for this activity from the joined data
-          const result = transformedReportData.trip_activity_results?.find(r => r.activity_id === activity.id);
-          
-          return {
-            id: activity.id,
-            activity_number: activity.activity_number,
-            activity_text: activity.activity_text,
-            is_compulsory: activity.is_compulsory,
-            check_status: result ? result.check_status : 'pending',
-            remarks: result ? result.remarks || '' : ''
-          };
-        }).sort((a, b) => a.activity_number.localeCompare(b.activity_number));
-        
-        return {
-          id: category.id,
-          category_number: category.category_number,
-          name: category.name,
-          activities
-        };
-      }).sort((a, b) => a.category_number.localeCompare(b.category_number));
-      
-      return {
-        id: section.id,
-        section_number: section.section_number,
-        name: section.name,
-        categories
-      };
-    }).sort((a, b) => a.section_number.localeCompare(b.section_number));
-    
-    // Calculate statistics
-    const stats = calculateReportStats(processedSections);
-    
-    // Combine everything into the final report object
-    const finalReport: TripReport = {
-      ...transformedReportData,
-      sections: processedSections,
-      stats
-    };
-    
-    return finalReport;
+    return sectionsData || getDefaultInspectionStructure();
   } catch (error) {
-    console.error('Error in fetchTripReportData:', error);
-    throw error;
+    console.warn('Failed to fetch inspection structure, using default:', error);
+    return getDefaultInspectionStructure();
   }
 }
 
 /**
- * Calculate statistics for the report
+ * Default inspection structure as fallback
  */
-function calculateReportStats(sections: Section[]): ReportStats {
+function getDefaultInspectionStructure(): any[] {
+  return [
+    {
+      id: 'default-1',
+      section_number: '1',
+      name: 'General Inspection',
+      inspection_categories: [
+        {
+          id: 'default-cat-1',
+          category_number: '1.1',
+          name: 'Basic Checks',
+          inspection_activities: [
+            {
+              id: 'default-act-1',
+              activity_number: '1.1.1',
+              activity_text: 'Visual inspection completed',
+              is_compulsory: true
+            }
+          ]
+        }
+      ]
+    }
+  ];
+}
+
+/**
+ * Process inspection sections with activity results
+ */
+function processInspectionSections(sectionsData: any[], activityResults: any[]): Section[] {
+  return sectionsData.map(section => {
+    const categories = section.inspection_categories.map((category: any) => {
+      const activities = category.inspection_activities.map((activity: any) => {
+        // Find the corresponding result for this activity from the joined data
+        const result = activityResults?.find(r => r.activity_id === activity.id);
+        
+        return {
+          id: activity.id,
+          activity_number: activity.activity_number,
+          activity_text: activity.activity_text,
+          is_compulsory: activity.is_compulsory,
+          check_status: result ? result.check_status : 'pending',
+          remarks: result ? result.remarks || '' : ''
+        };
+      }).sort((a: any, b: any) => a.activity_number.localeCompare(b.activity_number));
+      
+      return {
+        id: category.id,
+        category_number: category.category_number,
+        name: category.name,
+        activities
+      };
+    }).sort((a: any, b: any) => a.category_number.localeCompare(b.category_number));
+    
+    return {
+      id: section.id,
+      section_number: section.section_number,
+      name: section.name,
+      categories
+    };
+  }).sort((a, b) => a.section_number.localeCompare(b.section_number));
+}
+
+/**
+ * Calculate enhanced statistics for the report
+ */
+function calculateEnhancedReportStats(sections: Section[]): ReportStats {
   let total_activities = 0;
   let checked_okay = 0;
   let checked_not_okay = 0;
@@ -236,10 +379,48 @@ function calculateReportStats(sections: Section[]): ReportStats {
     });
   });
   
+  const completion_percentage = total_activities > 0 
+    ? Math.round(((checked_okay + checked_not_okay) / total_activities) * 100) 
+    : 0;
+  
   return {
     total_activities,
     checked_okay,
     checked_not_okay,
-    unchecked
+    unchecked,
+    completion_percentage
   };
+}
+
+/**
+ * Clear the report cache
+ */
+export function clearReportCache(): void {
+  reportCache.clear();
+  console.log('Report cache cleared');
+}
+
+/**
+ * Get cache statistics
+ */
+export function getCacheStats(): { size: number; keys: string[] } {
+  return {
+    size: reportCache.size,
+    keys: Array.from(reportCache.keys())
+  };
+}
+
+/**
+ * Batch fetch multiple reports (for admin dashboard)
+ */
+export async function fetchMultipleReports(reportIds: string[]): Promise<TripReport[]> {
+  const results = await Promise.allSettled(
+    reportIds.map(id => fetchTripReportData(id))
+  );
+  
+  return results
+    .filter((result): result is PromiseFulfilledResult<TripReport> => 
+      result.status === 'fulfilled' && result.value !== null
+    )
+    .map(result => result.value);
 }

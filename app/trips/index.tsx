@@ -5,9 +5,10 @@ import {
   ScrollView, 
   ActivityIndicator, 
   RefreshControl,
-  Alert,
   TouchableOpacity
 } from 'react-native';
+import { logDebug, logError } from '@/utils/logger';
+import { showError } from '@/utils/errorHandler';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Header, StyledText } from '@/components/themed';
 import { useAuth } from '@/context/AuthContext';
@@ -19,15 +20,12 @@ import {
 } from '@/components/inspection';
 import { useTheme } from '@/hooks/useTheme';
 import { Ionicons } from '@expo/vector-icons';
-import { diagnosticTools } from '@/utils/diagnosticTools';
-
 export default function TripsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const [refreshing, setRefreshing] = React.useState(false);
-  const [showDiagnostic, setShowDiagnostic] = useState(false);
 
   const {
     loading,
@@ -57,11 +55,14 @@ export default function TripsScreen() {
   } = useInspectionData();
 
   useEffect(() => {
+    logDebug('TripsScreen useEffect triggered with tripId:', tripId);
     if (tripId) {
       // If a specific trip ID is provided, load that report
+      logDebug('Loading existing report with ID:', tripId);
       loadExistingReport(tripId);
     } else {
       // Otherwise check for existing drafts or create a new one
+      logDebug('Checking for existing draft report or creating new one');
       checkExistingDraftReport();
     }
   }, [tripId]);
@@ -73,17 +74,7 @@ export default function TripsScreen() {
     // Run this effect on every render to ensure location is always JSDG
   }, []); // Empty dependency array to run once, but we'll force the value in the UI
 
-  useEffect(() => {
-    if (!tripReportId || loading) return;
-    
-    // Basic check for potential issues
-    let hasEmptySections = sections.some(section => 
-      section.categories.length === 0 || 
-      section.categories.every(cat => cat.activities.length === 0)
-    );
-    
-    setShowDiagnostic(hasEmptySections);
-  }, [sections, tripReportId, loading]);
+
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -96,8 +87,8 @@ export default function TripsScreen() {
         await checkExistingDraftReport();
       }
     } catch (error) {
-      console.error('Error refreshing data:', error);
-      Alert.alert('Error', 'Failed to refresh data. Please try again.');
+      logError('Error refreshing data:', error);
+      showError({ message: 'Failed to refresh data. Please try again.' });
     } finally {
       setRefreshing(false);
     }
@@ -106,7 +97,7 @@ export default function TripsScreen() {
   const handleSubmitReport = async () => {
     try {
       if (!tripReportId) {
-        Alert.alert('Error', 'Report ID is missing. Cannot submit report.');
+        showError({ message: 'Report ID is missing. Cannot submit report.' });
         return;
       }
       
@@ -119,8 +110,8 @@ export default function TripsScreen() {
       // Navigate back after successful submission
       router.push('/reports');
     } catch (error) {
-      console.error('Error submitting report:', error);
-      Alert.alert('Error', 'Failed to submit report. Please try again.');
+      logError('Error submitting report:', error);
+      showError({ message: 'Failed to submit report. Please try again.' });
     }
   };
 
@@ -143,10 +134,7 @@ export default function TripsScreen() {
     return totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
   };
 
-  const runDiagnostics = async () => {
-    if (!tripReportId) return;
-    await diagnosticTools.showAdvancedDiagnosticAlert(tripReportId);
-  };
+
 
   if (loading) {
     return (
@@ -158,22 +146,25 @@ export default function TripsScreen() {
   }
 
   const inspectionProgress = calculateInspectionProgress();
+  
+  // Debug the submit button state
+  // Temporarily remove trainNumber requirement for testing
+  const isDisabled = !location;
+  console.log('Submit button debug:', {
+    trainNumber: `"${trainNumber}"`,
+    location: `"${location}"`,
+    isDisabled,
+    inspectionProgress,
+    submitting,
+    status,
+    tripId
+  });
+
+  logDebug('TripsScreen render - loading:', loading, 'sections.length:', sections.length, 'tripReportId:', tripReportId);
 
   return (
     <View style={styles.container}>
       <Header title="Inspection Checklist" showBackButton />
-      
-      {showDiagnostic && (
-        <TouchableOpacity 
-          style={styles.diagnosticBanner}
-          onPress={runDiagnostics}
-        >
-          <Ionicons name="warning-outline" size={20} color="#fff" />
-          <StyledText style={styles.diagnosticText}>
-            Potential data issues detected. Tap to run diagnostics.
-          </StyledText>
-        </TouchableOpacity>
-      )}
       
       <ScrollView 
         style={styles.scrollView}
@@ -232,7 +223,7 @@ export default function TripsScreen() {
             onSubmit={handleSubmitReport}
             submitting={submitting}
             inspectionProgress={inspectionProgress}
-            disabled={!trainNumber || !location}
+            disabled={isDisabled}
           />
         )}
       </ScrollView>
@@ -269,16 +260,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#666',
   },
-  diagnosticBanner: {
-    backgroundColor: '#F59E0B',
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  diagnosticText: {
-    color: '#fff',
-    marginLeft: 8,
-    fontWeight: '500',
-  },
+
 });

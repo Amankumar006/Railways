@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -13,20 +13,13 @@ import {
   ProgressBar 
 } from '@/components/themed';
 import { 
-  File, 
-  Train, 
-  BarChart2, 
-  Users, 
-  CheckCircle, 
-  Clock, 
-  AlertTriangle,
   ClipboardList,
-  Settings,
   Eye,
-  Download
+  Download,
+  Clock
 } from 'lucide-react-native';
-import { generateTripReport } from '@/utils/pdfGenerator';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { generateTripReport, validateReportForGeneration } from '@/utils/pdfGenerator';
+import { DataIntegrityChecker } from '@/components/admin/DataIntegrityChecker';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -134,14 +127,92 @@ export default function DashboardScreen() {
   // Handler for downloading a report as PDF
   const handleDownloadReport = async (reportId: string) => {
     try {
-      // Show loading indicator or toast message
-      alert('Generating PDF report...');
+      // Validate report before generation
+      const validation = await validateReportForGeneration(reportId);
       
-      // Generate and share the PDF report
-      await generateTripReport(reportId);
+      if (!validation.isValid) {
+        Alert.alert(
+          'Report Validation Failed',
+          `Cannot generate PDF:\n${validation.issues.join('\n')}`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      // Show warnings if any
+      if (validation.warnings.length > 0) {
+        Alert.alert(
+          'Report Warnings',
+          `The following issues were found:\n${validation.warnings.join('\n')}\n\nDo you want to continue?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Continue', 
+              onPress: () => generateReportWithProgress(reportId)
+            }
+          ]
+        );
+        return;
+      }
+      
+      // Generate report directly if no warnings
+      await generateReportWithProgress(reportId);
+      
     } catch (error) {
+      console.error('Error in handleDownloadReport:', error);
+      Alert.alert(
+        'Error', 
+        'Failed to process report. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+  
+  // Enhanced report generation with progress tracking
+  const generateReportWithProgress = async (reportId: string) => {
+    try {
+      
+      // Show progress alert
+      Alert.alert(
+        'Generating Report',
+        'Preparing your inspection report...',
+        [],
+        { cancelable: false }
+      );
+      
+      await generateTripReport(reportId, {
+        showProgress: true,
+        includeQRCode: false,
+        customTemplate: false,
+        emailAfterGeneration: false,
+        saveToDevice: true
+      }, (progress) => {
+        // Progress callback - could be used to update UI
+        console.log(`Report generation: ${progress.stage} - ${progress.progress}% - ${progress.message}`);
+      });
+      
+      // Success feedback
+      Alert.alert(
+        'Success',
+        'Report generated and downloaded successfully!',
+        [{ text: 'OK' }]
+      );
+      
+    } catch (error: any) {
       console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF report. Please try again.');
+      
+      // Enhanced error messages
+      let errorMessage = 'Failed to generate PDF report. Please try again.';
+      
+      if (error.message?.includes('permission')) {
+        errorMessage = 'You do not have permission to access this report.';
+      } else if (error.message?.includes('network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+        errorMessage = 'Database error. Please contact system administrator.';
+      }
+      
+      Alert.alert('Error', errorMessage, [{ text: 'OK' }]);
     }
   };
   
@@ -271,6 +342,14 @@ export default function DashboardScreen() {
               Manage Users
             </StyledText>
           </TouchableOpacity>
+        </StyledView>
+
+        {/* Data Integrity Section for Managers */}
+        <StyledView style={styles.section}>
+          <StyledText size="lg" weight="semibold" style={styles.sectionTitle}>
+            System Maintenance
+          </StyledText>
+          <DataIntegrityChecker />
         </StyledView>
       </ScrollView>
     </StyledView>

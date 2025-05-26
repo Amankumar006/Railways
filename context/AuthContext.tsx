@@ -44,7 +44,7 @@ const mapUserData = async (session: Session): Promise<User> => {
         email: session.user.email || '',
         name: session.user.user_metadata?.full_name || 'User',
         role: 'inspector', // Default role
-        approvalStatus: 'approved', // Set to approved to allow login
+        approvalStatus: 'pending', // Set to pending by default - users need approval
       };
     }
     
@@ -68,7 +68,7 @@ const mapUserData = async (session: Session): Promise<User> => {
       email: session.user.email || '',
       name: session.user.user_metadata?.full_name || 'User',
       role: 'inspector', // Default role
-      approvalStatus: 'approved', // Changed from 'pending' to 'approved' to ensure login works
+      approvalStatus: 'pending', // Users need approval by default
     };
   }
 };
@@ -96,16 +96,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state change:', event, session ? 'session exists' : 'no session');
+        
         if (session) {
           try {
             const user = await mapUserData(session);
+            console.log('User mapped:', user.email, user.approvalStatus);
             
             // Check if the user is approved
             if (user.approvalStatus === 'pending') {
+              console.log('User pending approval, signing out');
               safeSetState({
                 isAuthenticated: false,
                 user,
-                token: session.access_token,
+                token: null,
                 loading: false,
                 error: null,
                 pendingApproval: true,
@@ -113,6 +117,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               // Sign out the user if they're not approved
               await supabase.auth.signOut();
             } else if (user.approvalStatus === 'rejected') {
+              console.log('User rejected, signing out');
               safeSetState({
                 isAuthenticated: false,
                 user,
@@ -124,6 +129,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               // Sign out the user if they're rejected
               await supabase.auth.signOut();
             } else {
+              console.log('User approved, setting authenticated');
               safeSetState({
                 isAuthenticated: true,
                 user,
@@ -144,12 +150,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             });
           }
         } else {
+          console.log('No session, setting unauthenticated');
           safeSetState({
             isAuthenticated: false,
             user: null,
             token: null,
             loading: false,
             error: null,
+            pendingApproval: false,
           });
         }
       }
@@ -500,12 +508,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user: {
           ...profileData,
           id: data.user.id,
+          approvalStatus: 'pending' as const,
         },
         token: null
       };
       
       if (__DEV__) console.log('Setting final state:', finalState);
       safeSetState(finalState);
+      
+      // Success - the signup screen will handle navigation
       
     } catch (error: any) {
       if (__DEV__) console.error('Signup error:', error);
@@ -730,4 +741,5 @@ export const useAuth = () => {
   return context;
 };
 
+// Default export to satisfy router requirements
 export default AuthProvider;

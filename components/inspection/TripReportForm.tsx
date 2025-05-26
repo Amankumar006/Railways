@@ -238,6 +238,14 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
 }) => {
   const { colors, theme } = useTheme();
   
+  // Debug logging
+  console.log('SubmitSection render:', {
+    inspectionProgress,
+    disabled,
+    submitting,
+    canSubmit: !disabled && !submitting && inspectionProgress >= 80
+  });
+  
   return (
     <Card 
       style={[styles.submitCard, { backgroundColor: colors.card }]}
@@ -249,16 +257,16 @@ export const SubmitSection: React.FC<SubmitSectionProps> = ({
         <StyledText style={[styles.progressText, { color: theme.indianRailways.blue }]}>
           Inspection Progress: {inspectionProgress}%
         </StyledText>
-        {inspectionProgress < 100 && (
+        {inspectionProgress < 80 && (
           <StyledText style={[styles.progressNote, { color: colors.textSecondary }]}>
-            Complete all inspection activities to submit the report
+            Complete at least 80% of inspection activities to submit the report
           </StyledText>
         )}
       </View>
       <Button
         title={!submitting ? "Submit Report" : undefined}
         onPress={onSubmit}
-        disabled={disabled || submitting || inspectionProgress < 100}
+        disabled={disabled || submitting || inspectionProgress < 80}
         style={styles.submitButton}
         variant="primary"
         icon={submitting ? <ActivityIndicator size="small" color="#FFFFFF" /> : undefined}
