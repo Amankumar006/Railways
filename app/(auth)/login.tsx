@@ -79,10 +79,10 @@ export default function LoginScreen() {
           style={styles.logoContainer}
           entering={FadeInDown.duration(800).delay(200)}
         >
-          <Image 
-            source={require('@/assets/images/indian-railway-bg.png')} 
+          <Image
+            source={require('../../assets/images/indian-railway-bg.png')}
             style={styles.backgroundImage}
-            blurRadius={1}
+            resizeMode="cover"
           />
           <StyledView style={styles.logoOverlay} backgroundColor="transparent">
             <StyledText size="4xl" weight="bold" color={colors.white} style={styles.logoText}>
@@ -226,16 +226,14 @@ const styles = StyleSheet.create({
     tintColor: colors.white,
   },
   logoText: {
-    // Using the deprecated properties with a comment to explain why
-    // These are flagged as deprecated but the TypeScript types don't support textShadow yet
+    // @ts-ignore - textShadow properties work but TypeScript types are outdated
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 5,
-    // Note: The proper way would be to use textShadow: '1px 1px 5px rgba(0, 0, 0, 0.75)',
-    // but this isn't supported in the TypeScript types yet
   },
   logoSubText: {
     marginTop: 8,
+    // @ts-ignore - textShadow properties work but TypeScript types are outdated
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 5,

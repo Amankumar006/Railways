@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -13,20 +13,13 @@ import {
   ProgressBar 
 } from '@/components/themed';
 import { 
-  File, 
-  Train, 
-  BarChart2, 
-  Users, 
-  CheckCircle, 
-  Clock, 
-  AlertTriangle,
   ClipboardList,
-  Settings,
   Eye,
-  Download
+  Download,
+  Clock
 } from 'lucide-react-native';
-import { generateTripReport, sharePDF } from '@/utils/pdfGenerator';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { generateTripReport, validateReportForGeneration } from '@/utils/pdfGenerator';
+import { DataIntegrityChecker } from '@/components/admin/DataIntegrityChecker';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -61,50 +54,10 @@ export default function DashboardScreen() {
           .select('count')
           .limit(1);
         
-        // If table doesn't exist or other error, use mock data
+        // If table doesn't exist or other error, return empty array
         if (schemaError) {
-          console.log('Using mock data due to schema error:', schemaError);
-          // No data found, use mock data
-          const mockReports = [
-            {
-              id: 'mock-draft',
-              train_number: '22222',
-              train_name: 'Duronto Express',
-              departure_station: 'Chennai',
-              arrival_station: 'Kolkata',
-              inspection_date: new Date().toISOString(),
-              status: 'draft',
-              created_at: new Date().toISOString(),
-              coach_count: 2,
-              issues_count: 1,
-              progress: 60
-            },
-            {
-              id: 'mock-1',
-              train_number: '12345',
-              train_name: 'Rajdhani Express',
-              departure_station: 'New Delhi',
-              arrival_station: 'Mumbai Central',
-              inspection_date: new Date().toISOString(),
-              status: 'submitted',
-              created_at: new Date().toISOString(),
-              coach_count: 3,
-              issues_count: 2
-            },
-            {
-              id: 'mock-2',
-              train_number: '54321',
-              train_name: 'Shatabdi Express',
-              departure_station: 'Howrah',
-              arrival_station: 'New Delhi',
-              inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-              status: 'approved',
-              created_at: new Date(Date.now() - 86400000).toISOString(),
-              coach_count: 5,
-              issues_count: 0
-            }
-          ];
-          setTripReports(mockReports);
+          console.log('Error accessing trip_reports table:', schemaError);
+          setTripReports([]);
         } else {
           // Table exists, try to fetch data
           let query;
@@ -134,79 +87,13 @@ export default function DashboardScreen() {
             console.log('Fetched trip reports:', data.length);
             setTripReports(data);
           } else {
-            // No data found, use mock data
-            const mockReports = [
-              {
-                id: 'mock-1',
-                train_number: '12345',
-                train_name: 'Rajdhani Express',
-                departure_station: 'New Delhi',
-                arrival_station: 'Mumbai Central',
-                inspection_date: new Date().toISOString(),
-                status: 'submitted',
-                created_at: new Date().toISOString(),
-                coach_count: 3,
-                issues_count: 2
-              },
-              {
-                id: 'mock-2',
-                train_number: '54321',
-                train_name: 'Shatabdi Express',
-                departure_station: 'Howrah',
-                arrival_station: 'New Delhi',
-                inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-                status: 'approved',
-                created_at: new Date(Date.now() - 86400000).toISOString(),
-                coach_count: 5,
-                issues_count: 0
-              }
-            ];
-            setTripReports(mockReports);
+            console.log('No trip reports found');
+            setTripReports([]);
           }
         }
       } catch (error) {
         console.error('Failed to fetch trip reports:', error);
-        // Fallback to mock data on any error
-        const mockReports = [
-          {
-            id: 'mock-draft',
-            train_number: '22222',
-            train_name: 'Duronto Express',
-            departure_station: 'Chennai',
-            arrival_station: 'Kolkata',
-            inspection_date: new Date().toISOString(),
-            status: 'draft',
-            created_at: new Date().toISOString(),
-            coach_count: 2,
-            issues_count: 1,
-            progress: 60
-          },
-          {
-            id: 'mock-1',
-            train_number: '12345',
-            train_name: 'Rajdhani Express',
-            departure_station: 'New Delhi',
-            arrival_station: 'Mumbai Central',
-            inspection_date: new Date().toISOString(),
-            status: 'submitted',
-            created_at: new Date().toISOString(),
-            coach_count: 3,
-            issues_count: 2
-          },
-          {
-            id: 'mock-2',
-            train_number: '54321',
-            train_name: 'Shatabdi Express',
-            departure_station: 'Howrah',
-            arrival_station: 'New Delhi',
-            inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-            status: 'approved',
-            created_at: new Date(Date.now() - 86400000).toISOString(),
-            coach_count: 5,
-            issues_count: 0
-          }
-        ];
-        setTripReports(mockReports);
+        setTripReports([]);
       } finally {
         setLoading(false);
       }
@@ -228,27 +115,104 @@ export default function DashboardScreen() {
   
   const handleUsersPress = () => {
     if (isManager) {
-      router.push('/users');
+      router.push('/admin/manage-users');
     }
   };
   
   // Handler for viewing a report
   const handleViewReport = (reportId: string) => {
-    router.push(`/trips?id=${reportId}`);
+    router.push(`/trips?tripId=${reportId}`);
   };
   
   // Handler for downloading a report as PDF
   const handleDownloadReport = async (reportId: string) => {
     try {
-      // Show loading indicator or toast message
-      alert('Generating PDF report...');
+      // Validate report before generation
+      const validation = await validateReportForGeneration(reportId);
       
-      // Generate and share the HTML report
-      const filePath = await generateTripReport(reportId);
-      await sharePDF(filePath);
+      if (!validation.isValid) {
+        Alert.alert(
+          'Report Validation Failed',
+          `Cannot generate PDF:\n${validation.issues.join('\n')}`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      // Show warnings if any
+      if (validation.warnings.length > 0) {
+        Alert.alert(
+          'Report Warnings',
+          `The following issues were found:\n${validation.warnings.join('\n')}\n\nDo you want to continue?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Continue', 
+              onPress: () => generateReportWithProgress(reportId)
+            }
+          ]
+        );
+        return;
+      }
+      
+      // Generate report directly if no warnings
+      await generateReportWithProgress(reportId);
+      
     } catch (error) {
+      console.error('Error in handleDownloadReport:', error);
+      Alert.alert(
+        'Error', 
+        'Failed to process report. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+  
+  // Enhanced report generation with progress tracking
+  const generateReportWithProgress = async (reportId: string) => {
+    try {
+      
+      // Show progress alert
+      Alert.alert(
+        'Generating Report',
+        'Preparing your inspection report...',
+        [],
+        { cancelable: false }
+      );
+      
+      await generateTripReport(reportId, {
+        showProgress: true,
+        includeQRCode: false,
+        customTemplate: false,
+        emailAfterGeneration: false,
+        saveToDevice: true
+      }, (progress) => {
+        // Progress callback - could be used to update UI
+        console.log(`Report generation: ${progress.stage} - ${progress.progress}% - ${progress.message}`);
+      });
+      
+      // Success feedback
+      Alert.alert(
+        'Success',
+        'Report generated and downloaded successfully!',
+        [{ text: 'OK' }]
+      );
+      
+    } catch (error: any) {
       console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF report. Please try again.');
+      
+      // Enhanced error messages
+      let errorMessage = 'Failed to generate PDF report. Please try again.';
+      
+      if (error.message?.includes('permission')) {
+        errorMessage = 'You do not have permission to access this report.';
+      } else if (error.message?.includes('network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+        errorMessage = 'Database error. Please contact system administrator.';
+      }
+      
+      Alert.alert('Error', errorMessage, [{ text: 'OK' }]);
     }
   };
   
@@ -379,6 +343,14 @@ export default function DashboardScreen() {
             </StyledText>
           </TouchableOpacity>
         </StyledView>
+
+        {/* Data Integrity Section for Managers */}
+        <StyledView style={styles.section}>
+          <StyledText size="lg" weight="semibold" style={styles.sectionTitle}>
+            System Maintenance
+          </StyledText>
+          <DataIntegrityChecker />
+        </StyledView>
       </ScrollView>
     </StyledView>
   ) : renderInspectorDashboard();
@@ -405,50 +377,10 @@ function renderInspectorDashboard() {
           .select('count')
           .limit(1);
         
-        // If table doesn't exist or other error, use mock data
+        // If table doesn't exist or other error, return empty array
         if (schemaError) {
-          console.log('Using mock data due to schema error in inspector view:', schemaError);
-          // Always use mock data for demo
-          const mockReports = [
-            {
-              id: 'mock-draft',
-              train_number: '22222',
-              train_name: 'Duronto Express',
-              departure_station: 'Chennai',
-              arrival_station: 'Kolkata',
-              inspection_date: new Date().toISOString(),
-              status: 'draft',
-              created_at: new Date().toISOString(),
-              coach_count: 2,
-              issues_count: 1,
-              progress: 60
-            },
-            {
-              id: 'mock-1',
-              train_number: '12345',
-              train_name: 'Rajdhani Express',
-              departure_station: 'New Delhi',
-              arrival_station: 'Mumbai Central',
-              inspection_date: new Date().toISOString(),
-              status: 'submitted',
-              created_at: new Date().toISOString(),
-              coach_count: 3,
-              issues_count: 2
-            },
-            {
-              id: 'mock-2',
-              train_number: '54321',
-              train_name: 'Shatabdi Express',
-              departure_station: 'Howrah',
-              arrival_station: 'New Delhi',
-              inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-              status: 'approved',
-              created_at: new Date(Date.now() - 86400000).toISOString(),
-              coach_count: 5,
-              issues_count: 0
-            }
-          ];
-          setTripReports(mockReports);
+          console.log('Error accessing trip_reports table in inspector view:', schemaError);
+          setTripReports([]);
         } else {
           // Table exists, try to fetch data
           const query = supabase
@@ -466,79 +398,13 @@ function renderInspectorDashboard() {
             console.log('Fetched trip reports:', data.length);
             setTripReports(data);
           } else {
-            // No data found, use mock data
-            const mockReports = [
-              {
-                id: 'mock-1',
-                train_number: '12345',
-                train_name: 'Rajdhani Express',
-                departure_station: 'New Delhi',
-                arrival_station: 'Mumbai Central',
-                inspection_date: new Date().toISOString(),
-                status: 'submitted',
-                created_at: new Date().toISOString(),
-                coach_count: 3,
-                issues_count: 2
-              },
-              {
-                id: 'mock-2',
-                train_number: '54321',
-                train_name: 'Shatabdi Express',
-                departure_station: 'Howrah',
-                arrival_station: 'New Delhi',
-                inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-                status: 'approved',
-                created_at: new Date(Date.now() - 86400000).toISOString(),
-                coach_count: 5,
-                issues_count: 0
-              }
-            ];
-            setTripReports(mockReports);
+            console.log('No trip reports found');
+            setTripReports([]);
           }
         }
       } catch (error) {
         console.error('Failed to fetch trip reports:', error);
-        // Fallback to mock data on any error
-        const mockReports = [
-          {
-            id: 'mock-draft',
-            train_number: '22222',
-            train_name: 'Duronto Express',
-            departure_station: 'Chennai',
-            arrival_station: 'Kolkata',
-            inspection_date: new Date().toISOString(),
-            status: 'draft',
-            created_at: new Date().toISOString(),
-            coach_count: 2,
-            issues_count: 1,
-            progress: 60
-          },
-          {
-            id: 'mock-1',
-            train_number: '12345',
-            train_name: 'Rajdhani Express',
-            departure_station: 'New Delhi',
-            arrival_station: 'Mumbai Central',
-            inspection_date: new Date().toISOString(),
-            status: 'submitted',
-            created_at: new Date().toISOString(),
-            coach_count: 3,
-            issues_count: 2
-          },
-          {
-            id: 'mock-2',
-            train_number: '54321',
-            train_name: 'Shatabdi Express',
-            departure_station: 'Howrah',
-            arrival_station: 'New Delhi',
-            inspection_date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-            status: 'approved',
-            created_at: new Date(Date.now() - 86400000).toISOString(),
-            coach_count: 5,
-            issues_count: 0
-          }
-        ];
-        setTripReports(mockReports);
+        setTripReports([]);
       } finally {
         setLoading(false);
       }
@@ -560,14 +426,13 @@ function renderInspectorDashboard() {
   
   const handleUsersPress = () => {
     // For now, just show an alert since these pages don't exist yet
-    alert('User management coming soon!');
     // Future implementation when users page is created
-    // router.push('/users');
+    router.push('/admin/manage-users');
   };
   
   // Handler for viewing a report
   const handleViewReport = (reportId: string) => {
-    router.push(`/trips?id=${reportId}`);
+    router.push(`/trips?tripId=${reportId}`);
   };
   
   // Return the inspector dashboard UI

@@ -1,54 +1,66 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TextInput, ActivityIndicator, TouchableOpacity, Text, Platform } from 'react-native';
 import { StyledText, Button, Card } from '@/components/themed';
 import { useTheme } from '@/hooks/useTheme';
 import { getColorValue, COLORS } from '@/utils/colorUtils';
+import { Picker } from '@react-native-picker/picker';
 
 interface TripReportFormProps {
   trainNumber: string;
   trainName: string;
   location: string;
+  lineNumber: string;
   redOnTime: string;
   redOffTime: string;
   onTrainNumberChange: (value: string) => void;
   onTrainNameChange: (value: string) => void;
   onLocationChange: (value: string) => void;
+  onLineNumberChange: (value: string) => void;
   onRedOnTimeChange: (value: string) => void;
   onRedOffTimeChange: (value: string) => void;
   onSubmit: () => void;
   submitting: boolean;
+  disableLocation?: boolean;
 }
 
 export const TripReportForm: React.FC<TripReportFormProps> = ({
   trainNumber,
   trainName,
   location,
+  lineNumber,
   redOnTime,
   redOffTime,
   onTrainNumberChange,
   onTrainNameChange,
   onLocationChange,
+  onLineNumberChange,
   onRedOnTimeChange,
   onRedOffTimeChange,
   onSubmit,
   submitting,
+  disableLocation = false,
 }) => {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
 
   return (
-    <Card style={styles.container}>
-      <StyledText style={styles.title}>Trip Information</StyledText>
+    <Card 
+      style={styles.formCard}
+      variant="accent"
+      borderLeft={true}
+      borderLeftColor={theme.indianRailways.blue}
+    >
+      <StyledText style={[styles.title, { color: theme.indianRailways.blue }]}>Trip Informations</StyledText>
       
       <View style={styles.formRow}>
         <View style={styles.formGroup}>
-          <StyledText style={styles.label}>Train Number *</StyledText>
+          <StyledText style={[styles.label, { color: theme.indianRailways.blue }]}>Train Number *</StyledText>
           <TextInput
             style={[
               styles.input,
               { 
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                color: colors.text
+                borderColor: theme.indianRailways.blue,
+                backgroundColor: '#FFFFFF',
+                color: '#000000'
               }
             ]}
             value={trainNumber}
@@ -59,14 +71,14 @@ export const TripReportForm: React.FC<TripReportFormProps> = ({
         </View>
         
         <View style={styles.formGroup}>
-          <StyledText style={styles.label}>Train Name</StyledText>
+          <StyledText style={[styles.label, { color: theme.indianRailways.blue }]}>Train Name</StyledText>
           <TextInput
             style={[
               styles.input,
               { 
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                color: colors.text
+                borderColor: theme.indianRailways.blue,
+                backgroundColor: '#FFFFFF',
+                color: '#000000'
               }
             ]}
             value={trainName}
@@ -77,78 +89,194 @@ export const TripReportForm: React.FC<TripReportFormProps> = ({
         </View>
       </View>
       
-      <View style={styles.formGroup}>
-        <StyledText style={styles.label}>Location *</StyledText>
-        <TextInput
-          style={[
+      <View style={styles.formRow}>
+        <View style={[styles.formGroup, { flex: 1 }]}>
+          <StyledText style={[styles.label, { color: theme.indianRailways.blue }]}>Location * <StyledText style={styles.fixedText}>{disableLocation ? '(Fixed)' : ''}</StyledText></StyledText>
+          <TextInput
+            style={[
+              styles.input,
+              { 
+                borderColor: theme.indianRailways.blue,
+                backgroundColor: disableLocation ? '#f0f0f0' : '#FFFFFF',
+                color: disableLocation ? '#555' : '#000000',
+                fontWeight: disableLocation ? 'bold' : 'normal'
+              }
+            ]}
+            value={location}
+            onChangeText={onLocationChange}
+            placeholder="Enter inspection location"
+            placeholderTextColor={colors.textSecondary}
+            editable={!disableLocation}
+          />
+        </View>
+        
+        <View style={[styles.formGroup, { flex: 1 }]}>
+          <StyledText style={[styles.label, { color: theme.indianRailways.blue }]}>Line No.</StyledText>
+          <View style={[
             styles.input,
-            { 
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              color: colors.text
+            {
+              borderColor: theme.indianRailways.blue,
+              backgroundColor: '#FFFFFF',
+              padding: 0,
+              overflow: 'hidden'
             }
-          ]}
-          value={location}
-          onChangeText={onLocationChange}
-          placeholder="Enter inspection location"
-          placeholderTextColor={colors.textSecondary}
-        />
+          ]}>
+            <Picker
+              selectedValue={lineNumber}
+              onValueChange={onLineNumberChange}
+              style={{ 
+                height: 40, 
+                width: '100%',
+                backgroundColor: '#FFFFFF',
+                color: '#666666',
+              }}
+              itemStyle={{
+                backgroundColor: '#FFFFFF',
+                color: '#666666',
+                fontSize: 16  
+              }}
+              dropdownIconColor={theme.indianRailways.blue}
+            >
+              <Picker.Item label="Select Line No." value="" />
+              <Picker.Item label="09" value="09" color="#000000" />
+              <Picker.Item label="10" value="10" color="#000000" />
+              <Picker.Item label="11" value="11" color="#000000" />
+              <Picker.Item label="12" value="12" color="#000000" />
+            </Picker>
+          </View>
+        </View>
       </View>
       
       <View style={styles.formRow}>
         <View style={styles.formGroup}>
-          <StyledText style={styles.label}>RED On Time</StyledText>
+          <StyledText style={[styles.label, { color: theme.indianRailways.blue }]}>Red On Time</StyledText>
           <TextInput
             style={[
               styles.input,
               { 
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                color: colors.text
+                borderColor: theme.indianRailways.blue,
+                backgroundColor: '#FFFFFF',
+                color: '#000000'
               }
             ]}
             value={redOnTime}
-            onChangeText={onRedOnTimeChange}
-            placeholder="HH:MM"
+            onChangeText={(text) => {
+              // Only allow digits and colon in format HH:MM
+              const formattedText = text.replace(/[^0-9:]/g, '');
+              
+              // Auto-insert colon after hours are entered
+              let finalText = formattedText;
+              if (formattedText.length === 2 && !formattedText.includes(':') && text.length > redOnTime.length) {
+                finalText = `${formattedText}:`;
+              }
+              
+              // Basic format validation for HH:MM (24-hour format)
+              if (finalText === '' || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(finalText) || /^([0-1]?[0-9]|2[0-3])(:[0-5]?)?$/.test(finalText)) {
+                onRedOnTimeChange(finalText);
+              }
+            }}
+            placeholder="HH:MM (24-hour)"
             placeholderTextColor={getColorValue(colors.textSecondary, COLORS.TEXT_SECONDARY)}
+            keyboardType="numeric"
+            maxLength={5}
           />
         </View>
         
         <View style={styles.formGroup}>
-          <StyledText style={styles.label}>RED Off Time</StyledText>
+          <StyledText style={[styles.label, { color: theme.indianRailways.blue }]}>Red Off Time</StyledText>
           <TextInput
             style={[
               styles.input,
               { 
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                color: colors.text
+                borderColor: theme.indianRailways.blue,
+                backgroundColor: '#FFFFFF',
+                color: '#000000'
               }
             ]}
             value={redOffTime}
-            onChangeText={onRedOffTimeChange}
-            placeholder="HH:MM"
+            onChangeText={(text) => {
+              // Only allow digits and colon in format HH:MM
+              const formattedText = text.replace(/[^0-9:]/g, '');
+              
+              // Auto-insert colon after hours are entered
+              let finalText = formattedText;
+              if (formattedText.length === 2 && !formattedText.includes(':') && text.length > redOffTime.length) {
+                finalText = `${formattedText}:`;
+              }
+              
+              // Basic format validation for HH:MM (24-hour format)
+              if (finalText === '' || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(finalText) || /^([0-1]?[0-9]|2[0-3])(:[0-5]?)?$/.test(finalText)) {
+                onRedOffTimeChange(finalText);
+              }
+            }}
+            placeholder="HH:MM (24-hour)"
             placeholderTextColor={getColorValue(colors.textSecondary, COLORS.TEXT_SECONDARY)}
+            keyboardType="numeric"
+            maxLength={5}
           />
         </View>
       </View>
       
-      <View style={styles.footer}>
-        <StyledText style={styles.requiredNote}>* Required fields</StyledText>
-        <Button
-          title={!submitting ? "Submit Report" : undefined}
-          onPress={onSubmit}
-          disabled={submitting || !trainNumber || !location}
-          style={styles.submitButton}
-          icon={submitting ? <ActivityIndicator size="small" color="#FFFFFF" /> : undefined}
-        />
+      <StyledText style={[styles.requiredNote, { color: theme.indianRailways.blue }]}>* Required fields</StyledText>
+    </Card>
+  );
+};
+
+// Create a separate submit section component
+interface SubmitSectionProps {
+  onSubmit: () => void;
+  submitting: boolean;
+  inspectionProgress: number;
+  disabled: boolean;
+}
+
+export const SubmitSection: React.FC<SubmitSectionProps> = ({
+  onSubmit,
+  submitting,
+  inspectionProgress,
+  disabled
+}) => {
+  const { colors, theme } = useTheme();
+  
+  // Debug logging
+  console.log('SubmitSection render:', {
+    inspectionProgress,
+    disabled,
+    submitting,
+    canSubmit: !disabled && !submitting && inspectionProgress >= 80
+  });
+  
+  return (
+    <Card 
+      style={[styles.submitCard, { backgroundColor: colors.card }]}
+      variant="accent"
+      borderLeft={true}
+      borderLeftColor={theme.indianRailways.blue}
+    >
+      <View style={styles.progressInfo}>
+        <StyledText style={[styles.progressText, { color: theme.indianRailways.blue }]}>
+          Inspection Progress: {inspectionProgress}%
+        </StyledText>
+        {inspectionProgress < 80 && (
+          <StyledText style={[styles.progressNote, { color: colors.textSecondary }]}>
+            Complete at least 80% of inspection activities to submit the report
+          </StyledText>
+        )}
       </View>
+      <Button
+        title={!submitting ? "Submit Report" : undefined}
+        onPress={onSubmit}
+        disabled={disabled || submitting || inspectionProgress < 80}
+        style={styles.submitButton}
+        variant="primary"
+        icon={submitting ? <ActivityIndicator size="small" color="#FFFFFF" /> : undefined}
+      />
     </Card>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  formCard: {
     padding: 16,
     marginBottom: 16,
   },
@@ -170,6 +298,7 @@ const styles = StyleSheet.create({
   label: {
     marginBottom: 4,
     fontWeight: '500',
+    color: '#B8B8B8',
   },
   input: {
     borderWidth: 1,
@@ -177,17 +306,37 @@ const styles = StyleSheet.create({
     padding: 8,
     height: 40,
   },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  requiredNote: {
+    fontSize: 12,
+    fontStyle: 'italic',
     marginTop: 8,
   },
-  requiredNote: {
+  submitCard: {
+    padding: 16,
+    marginTop: 'auto',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  progressInfo: {
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  progressText: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  progressNote: {
     fontSize: 12,
     fontStyle: 'italic',
   },
   submitButton: {
-    minWidth: 150,
+    minWidth: '100%',
+    height: 48,
+  },
+  fixedText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: '#555',
   },
 });

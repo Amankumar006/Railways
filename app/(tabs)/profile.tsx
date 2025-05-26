@@ -9,7 +9,8 @@ import {
   useColorScheme,
   ActivityIndicator,
   Text,
-  Modal
+  Modal,
+  Platform
 } from 'react-native';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
@@ -23,7 +24,6 @@ import { User, Mail, Phone, Building, Shield, LogOut, Moon, Sun, CircleHelp as H
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
-import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -196,30 +196,51 @@ export default function ProfileScreen() {
     }
   };
   
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          onPress: async () => {
-            try {
-              await logout();
-              console.log('Logout successful');
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Logout Failed', 'Please try again');
-            }
+  const handleLogout = async () => {
+    // Use conditional approach based on platform
+    if (Platform.OS === 'web') {
+      // For web platform, show a browser confirm dialog instead of Alert
+      const confirmLogout = window.confirm('Are you sure you want to logout?');
+      
+      if (confirmLogout) {
+        try {
+          console.log('Web platform: initiating logout...');
+          // For web, we can simply call logout() directly
+          // Our improved AuthContext logout handles web-specific logic
+          await logout();
+          // No need to handle errors or do additional navigation
+          // as the AuthContext logout function handles everything
+        } catch (error) {
+          console.error('Logout error:', error);
+          window.alert('Logout failed. Please try again or refresh the page.');
+        }
+      }
+    } else {
+      // For mobile platforms, use React Native Alert
+      Alert.alert(
+        'Logout',
+        'Are you sure you want to logout?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
           },
-          style: 'destructive',
-        },
-      ]
-    );
+          {
+            text: 'Logout',
+            onPress: async () => {
+              try {
+                // Call the logout function - it handles navigation internally
+                await logout();
+              } catch (error) {
+                console.error('Logout error:', error);
+                Alert.alert('Logout Failed', 'Please try again');
+              }
+            },
+            style: 'destructive',
+          },
+        ]
+      );
+    }
   };
   
   // Image picker function

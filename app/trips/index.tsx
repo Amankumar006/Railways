@@ -1,22 +1,25 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   View, 
   StyleSheet, 
   ScrollView, 
   ActivityIndicator, 
   RefreshControl,
-  Alert
+  TouchableOpacity
 } from 'react-native';
+import { logDebug, logError } from '@/utils/logger';
+import { showError } from '@/utils/errorHandler';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Header, StyledText } from '@/components/themed';
 import { useAuth } from '@/context/AuthContext';
 import { useInspectionData } from '@/hooks/useInspectionData';
 import { 
   InspectionSection, 
-  TripReportForm 
+  TripReportForm,
+  SubmitSection
 } from '@/components/inspection';
 import { useTheme } from '@/hooks/useTheme';
-
+import { Ionicons } from '@expo/vector-icons';
 export default function TripsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -33,29 +36,45 @@ export default function TripsScreen() {
     redOnTime,
     redOffTime,
     location,
+    lineNumber,
     submitting,
     setTrainNumber,
     setTrainName,
     setRedOnTime,
     setRedOffTime,
     setLocation,
+    setLineNumber,
     checkExistingDraftReport,
     loadExistingReport,
     toggleSection,
     handleCheckStatusChange,
     handleRemarksChange,
-    submitReport
+    submitReport,
+    ensureAllActivitiesHaveResults,
+    status
   } = useInspectionData();
 
   useEffect(() => {
+    logDebug('TripsScreen useEffect triggered with tripId:', tripId);
     if (tripId) {
       // If a specific trip ID is provided, load that report
+      logDebug('Loading existing report with ID:', tripId);
       loadExistingReport(tripId);
     } else {
       // Otherwise check for existing drafts or create a new one
+      logDebug('Checking for existing draft report or creating new one');
       checkExistingDraftReport();
     }
   }, [tripId]);
+
+  // Set location to JSDG permanently
+  useEffect(() => {
+    // Always set location to JSDG regardless of what's loaded from DB
+    setLocation("JSDG");
+    // Run this effect on every render to ensure location is always JSDG
+  }, []); // Empty dependency array to run once, but we'll force the value in the UI
+
+
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -68,18 +87,54 @@ export default function TripsScreen() {
         await checkExistingDraftReport();
       }
     } catch (error) {
-      console.error('Error refreshing data:', error);
-      Alert.alert('Error', 'Failed to refresh data. Please try again.');
+      logError('Error refreshing data:', error);
+      showError({ message: 'Failed to refresh data. Please try again.' });
     } finally {
       setRefreshing(false);
     }
   }, [tripReportId, tripId]);
 
   const handleSubmitReport = async () => {
-    await submitReport();
-    // Navigate back after successful submission
-    router.push('/reports');
+    try {
+      if (!tripReportId) {
+        showError({ message: 'Report ID is missing. Cannot submit report.' });
+        return;
+      }
+      
+      // First ensure all activities have results
+      await ensureAllActivitiesHaveResults(tripReportId);
+      
+      // Then submit the report
+      await submitReport();
+      
+      // Navigate back after successful submission
+      router.push('/reports');
+    } catch (error) {
+      logError('Error submitting report:', error);
+      showError({ message: 'Failed to submit report. Please try again.' });
+    }
   };
+
+  // Calculate inspection progress
+  const calculateInspectionProgress = () => {
+    let totalActivities = 0;
+    let completedActivities = 0;
+
+    sections.forEach(section => {
+      section.categories.forEach(category => {
+        category.activities.forEach(activity => {
+          totalActivities++;
+          if (activity.checkStatus === 'checked-okay' || activity.checkStatus === 'checked-not-okay') {
+            completedActivities++;
+          }
+        });
+      });
+    });
+
+    return totalActivities > 0 ? Math.round((completedActivities / totalActivities) * 100) : 0;
+  };
+
+
 
   if (loading) {
     return (
@@ -89,6 +144,23 @@ export default function TripsScreen() {
       </View>
     );
   }
+
+  const inspectionProgress = calculateInspectionProgress();
+  
+  // Debug the submit button state
+  // Temporarily remove trainNumber requirement for testing
+  const isDisabled = !location;
+  console.log('Submit button debug:', {
+    trainNumber: `"${trainNumber}"`,
+    location: `"${location}"`,
+    isDisabled,
+    inspectionProgress,
+    submitting,
+    status,
+    tripId
+  });
+
+  logDebug('TripsScreen render - loading:', loading, 'sections.length:', sections.length, 'tripReportId:', tripReportId);
 
   return (
     <View style={styles.container}>
@@ -109,14 +181,20 @@ export default function TripsScreen() {
         <TripReportForm
           trainNumber={trainNumber}
           trainName={trainName}
-          location={location}
+          location={"JSDG"}
+          lineNumber={lineNumber}
           redOnTime={redOnTime}
           redOffTime={redOffTime}
           onTrainNumberChange={setTrainNumber}
           onTrainNameChange={setTrainName}
-          onLocationChange={setLocation}
+          onLocationChange={(value) => {
+            // Always preserve JSDG value
+            setLocation("JSDG");
+          }}
+          onLineNumberChange={setLineNumber}
           onRedOnTimeChange={setRedOnTime}
           onRedOffTimeChange={setRedOffTime}
+          disableLocation={true}
           onSubmit={handleSubmitReport}
           submitting={submitting}
         />
@@ -138,6 +216,16 @@ export default function TripsScreen() {
             </StyledText>
           </View>
         )}
+
+        {/* Submit section at the bottom of the scrollable content */}
+        {(!tripId || status === 'draft') && (
+          <SubmitSection
+            onSubmit={handleSubmitReport}
+            submitting={submitting}
+            inspectionProgress={inspectionProgress}
+            disabled={isDisabled}
+          />
+        )}
       </ScrollView>
     </View>
   );
@@ -151,25 +239,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingBottom: 32, // Extra padding at the bottom for better spacing
+  },
+  loadingText: {
+    marginTop: 16,
+    textAlign: 'center',
   },
   emptyState: {
-    padding: 20,
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   emptyText: {
     textAlign: 'center',
-    fontSize: 16,
-    opacity: 0.7,
+    color: '#666',
   },
+
 });

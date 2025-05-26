@@ -53,6 +53,28 @@ export default function AdminLayout() {
         headerShadowVisible: false,
         contentStyle: { backgroundColor: themeColors.background },
       }}
-    />
+    >
+      <Stack.Screen
+        name="index"
+        options={{
+          title: 'Admin Dashboard',
+          headerShown: true,
+        }}
+      />
+      <Stack.Screen
+        name="user-approvals"
+        options={{
+          title: 'User Approvals',
+          headerShown: true,
+        }}
+      />
+      <Stack.Screen
+        name="manage-users"
+        options={{
+          title: 'Manage Users',
+          headerShown: true,
+        }}
+      />
+    </Stack>
   );
 }

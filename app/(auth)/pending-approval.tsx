@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, Image, TouchableOpacity, Platform } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
@@ -14,9 +14,55 @@ export default function PendingApprovalScreen() {
   const router = useRouter();
   const { logout } = useAuth();
 
+  // Use effect to clear any URL fragments or params that might cause the error
+  useEffect(() => {
+    // For web platform, clean up URL to prevent fragment parsing errors
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+      try {
+        const currentUrl = window.location.href;
+        
+        // Extra safety checks - verify currentUrl exists before using includes()
+        if (typeof currentUrl === 'string') {
+          const hasAuthParams = 
+            currentUrl.indexOf('#') !== -1 || 
+            currentUrl.indexOf('access_token=') !== -1 || 
+            currentUrl.indexOf('refresh_token=') !== -1 ||
+            currentUrl.indexOf('type=recovery') !== -1;
+            
+          if (hasAuthParams) {
+            // Replace with clean URL (just the path)
+            const baseUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, baseUrl);
+            console.log('Cleaned URL parameters for safer navigation');
+          }
+        }
+      } catch (error) {
+        // Silently catch any URL parsing errors
+        console.error('URL parsing error in pending-approval screen:', error);
+      }
+    }
+  }, []);
+
   const handleLogout = async () => {
-    await logout();
-    router.replace('/(auth)/login');
+    try {
+      // Handle web platform specifically
+      if (Platform.OS === 'web') {
+        // First replace the router path to avoid URL parsing issues
+        router.replace('/(auth)/login');
+        // Then perform logout after a short delay
+        setTimeout(async () => {
+          await logout();
+        }, 100);
+      } else {
+        // For mobile platforms
+        await logout();
+        router.replace('/(auth)/login');
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force navigation even if logout fails
+      router.replace('/(auth)/login');
+    }
   };
 
   return (

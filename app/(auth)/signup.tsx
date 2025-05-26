@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StyledView } from '@/components/themed/StyledView';
 import { StyledText } from '@/components/themed/StyledText';
@@ -11,10 +11,12 @@ import { colors } from '@/constants/Colors';
 import { ROUTES } from '@/constants/Routes';
 import { UserRole } from '@/types';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { showError } from '@/utils/errorHandler';
+import { logDebug, logError } from '@/utils/logger';
 
 export default function SignupScreen() {
   const router = useRouter();
-  const { signup, loading, error } = useAuth();
+  const { signup, loading, error, pendingApproval } = useAuth();
 
   // Form state
   const [name, setName] = useState('');
@@ -23,6 +25,7 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [department, setDepartment] = useState('');
   const [phone, setPhone] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form validation errors
   const [nameError, setNameError] = useState('');
@@ -78,68 +81,80 @@ export default function SignupScreen() {
     }
   };
 
-  const handleSignup = () => {
-    console.log('Signup button clicked');
+  // Handle pendingApproval state change
+  useEffect(() => {
+    if (pendingApproval && !loading && !isSubmitting) {
+      logDebug('Pending approval detected, navigating to pending approval page');
+      router.replace('/(auth)/pending-approval');
+    }
+  }, [pendingApproval, loading, isSubmitting, router]);
+
+  const handleSignup = async () => {
+    if (isSubmitting) return; // Prevent multiple submissions
+    
+    logDebug('Signup button clicked');
     const isNameValid = validateName(name);
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
     const isConfirmPasswordValid = validateConfirmPassword(confirmPassword);
 
-    console.log('Validation results:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
+    logDebug('Validation results:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
 
     if (isNameValid && isEmailValid && isPasswordValid && isConfirmPasswordValid) {
-      // Show approval information before signing up
-      Alert.alert(
-        'Approval Required',
-        'After signing up, your account will require approval from a manager before you can use the app. This typically takes 1-2 business days.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Continue', 
-            onPress: () => {
-              console.log('Continue pressed, calling signup with:', email);
-              // Create the user data object
-              const userData = {
-                name,
-                email,
-                role: 'inspector' as UserRole,
-                department: department || undefined,
-                phone: phone || undefined,
-              };
-              
-              console.log('User data for signup:', userData);
-              
-              try {
-                // Call the signup function from AuthContext
-                signup(email, password, userData);
-                console.log('Signup function called successfully');
-              } catch (error) {
-                console.error('Error calling signup function:', error);
-                Alert.alert(
-                  'Signup Error',
-                  'An error occurred while trying to sign up. Please try again.',
-                  [{ text: 'OK' }]
-                );
-              }
-            }
-          }
-        ]
-      );
+      setIsSubmitting(true);
+      try {
+        // Create the user data object
+        const userData = {
+          name,
+          email,
+          role: 'inspector' as UserRole,
+          department: department || undefined,
+          phone: phone || undefined,
+        };
+        
+        // Call the signup function from AuthContext
+        await signup(email, password, userData);
+        
+        // Set submitting to false
+        setIsSubmitting(false);
+        
+        // Navigate to pending approval page
+        logDebug('Signup successful, redirecting to pending approval page');
+        router.replace('/(auth)/pending-approval');
+      } catch (error: any) {
+        logError('Error in signup process:', error);
+        setIsSubmitting(false);
+        
+        // Use our error handler for cross-platform compatibility
+        showError({ 
+          title: 'Signup Error',
+          message: error.message || 'An unexpected error occurred. Please try again.'
+        });
+      }
     } else {
-      console.log('Validation failed:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
-      Alert.alert(
-        'Validation Error',
-        'Please correct the errors in the form.',
-        [{ text: 'OK' }]
-      );
+      logDebug('Validation failed:', { isNameValid, isEmailValid, isPasswordValid, isConfirmPasswordValid });
+      
+      // Use our error handler for cross-platform compatibility
+      showError({ 
+        title: 'Validation Error',
+        message: 'Please correct the errors in the form.'
+      });
     }
   };
-  
-  // No helper functions needed - AuthContext handles all state management
+
+  // Show loading state
+  if (loading || isSubmitting) {
+    return (
+      <StyledView style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <StyledText style={{ marginTop: 16 }}>Creating your account...</StyledText>
+      </StyledView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView 
-      style={styles.container}
+      style={[styles.container, { pointerEvents: loading || isSubmitting ? 'none' : 'auto' }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={50}
     >
@@ -151,10 +166,10 @@ export default function SignupScreen() {
           style={styles.headerImageContainer}
           entering={FadeInDown.duration(800).delay(200)}
         >
-          <Image 
-            source={require('@/assets/images/indian-railway-bg.png')} 
+          <Image
+            source={require('../../assets/images/indian-railway-bg.png')}
             style={styles.backgroundImage}
-            blurRadius={1}
+            resizeMode="cover"
           />
           <StyledView style={styles.logoOverlay} backgroundColor="transparent">
             <StyledText size="3xl" weight="bold" color={colors.white} style={styles.logoText}>
@@ -280,10 +295,11 @@ export default function SignupScreen() {
           <Button
             title="Sign Up"
             onPress={handleSignup}
-            loading={loading}
+            loading={loading || isSubmitting}
             fullWidth
             size="lg"
             style={styles.signupButton}
+            disabled={loading || isSubmitting}
           />
           
           <View style={styles.loginContainer}>
@@ -334,12 +350,14 @@ const styles = StyleSheet.create({
     tintColor: colors.white,
   },
   logoText: {
+    // @ts-ignore - textShadow properties work but TypeScript types are outdated
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 5,
   },
   logoSubText: {
     marginTop: 4,
+    // @ts-ignore - textShadow properties work but TypeScript types are outdated
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 5,
@@ -393,5 +411,9 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     paddingHorizontal: 4,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

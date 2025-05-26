@@ -170,4 +170,11 @@ const styles = StyleSheet.create({
     marginTop: 24,
     alignItems: 'center',
   },
+  logoText: {
+    boxShadow: '1px 1px 5px rgba(0, 0, 0, 0.75)',
+  },
+  logoSubText: {
+    marginTop: 4,
+    boxShadow: '1px 1px 5px rgba(0, 0, 0, 0.75)',
+  },
 });

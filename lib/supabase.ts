@@ -3,6 +3,7 @@ import { Database } from '../types/supabase';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Get Supabase URL and Anon Key from environment variables
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl as string;
@@ -12,55 +13,80 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
+// Maximum size for SecureStore (2048 bytes)
+const MAX_SECURE_STORE_SIZE = 2000; // Leave some buffer
+
+// Storage implementation that handles large data by using both SecureStore and AsyncStorage
+const customStorage = {
+  getItem: async (key: string): Promise<string | null> => {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    try {
+      // First try SecureStore
+      const secureValue = await SecureStore.getItemAsync(key);
+      if (secureValue) {
+        return secureValue;
+      }
+
+      // If not in SecureStore, check AsyncStorage
+      const value = await AsyncStorage.getItem(key);
+      return value;
+    } catch (error) {
+      console.error('Storage getItem error:', error);
+      return null;
+    }
+  },
+
+  setItem: async (key: string, value: string) => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+      return;
+    }
+    try {
+      // If value is small enough, store in SecureStore
+      if (value.length <= MAX_SECURE_STORE_SIZE) {
+        await SecureStore.setItemAsync(key, value);
+      } else {
+        // For large values, use AsyncStorage
+        await AsyncStorage.setItem(key, value);
+      }
+    } catch (error) {
+      console.error('Storage setItem error:', error);
+    }
+  },
+
+  removeItem: async (key: string) => {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+      return;
+    }
+    try {
+      // Remove from both storages to ensure it's completely cleared
+      await Promise.all([
+        SecureStore.deleteItemAsync(key),
+        AsyncStorage.removeItem(key)
+      ]);
+    } catch (error) {
+      console.error('Storage removeItem error:', error);
+    }
+  },
+};
+
 // Create a single supabase client for interacting with your database
 export const supabase = createClient<Database>(
   supabaseUrl,
   supabaseAnonKey,
   {
+    auth: {
+      persistSession: true,
+      detectSessionInUrl: Platform.OS === 'web',
+      storage: customStorage,
+    },
     // Disable realtime subscriptions on Android to avoid Node.js module compatibility issues
     realtime: {
       params: {
-        // Completely disable WebSocket connections on Android
         eventsPerSecond: Platform.OS === 'android' ? 0 : 1,
-      },
-    },
-    auth: {
-      persistSession: true, // Enable session persistence
-      detectSessionInUrl: Platform.OS === 'web', // Only detect sessions in URL on web
-      storage: {
-        getItem: async (key: string) => {
-          if (Platform.OS === 'web') {
-            return localStorage.getItem(key);
-          }
-          try {
-            return await SecureStore.getItemAsync(key);
-          } catch (error) {
-            console.error('SecureStore getItem error:', error);
-            return null;
-          }
-        },
-        setItem: async (key: string, value: string) => {
-          if (Platform.OS === 'web') {
-            localStorage.setItem(key, value);
-            return;
-          }
-          try {
-            await SecureStore.setItemAsync(key, value);
-          } catch (error) {
-            console.error('SecureStore setItem error:', error);
-          }
-        },
-        removeItem: async (key: string) => {
-          if (Platform.OS === 'web') {
-            localStorage.removeItem(key);
-            return;
-          }
-          try {
-            await SecureStore.deleteItemAsync(key);
-          } catch (error) {
-            console.error('SecureStore removeItem error:', error);
-          }
-        },
       },
     },
   }

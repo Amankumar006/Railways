@@ -1,16 +1,17 @@
 import { Redirect } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
-import { View, ActivityIndicator, StyleSheet, Image } from 'react-native';
+import { View, StyleSheet, Image } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { StyledText, StyledView } from '../components/themed';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { LoadingTrain } from '@/components/LoadingTrain';
 
 /**
  * Root index component that handles authentication state and redirects accordingly
  * This is the main entry point of the application
  */
 export default function Index() {
-  const { isAuthenticated, loading, error } = useAuth();
+  const { isAuthenticated, loading, error, pendingApproval } = useAuth();
   const { colors, theme } = useTheme();
   
   // During loading, show a branded loading screen
@@ -20,7 +21,8 @@ export default function Index() {
         <Animated.View entering={FadeIn.duration(800)} style={styles.logoContainer}>
           <Image 
             source={require('../assets/images/ir-logo.png')} 
-            style={styles.logo}
+            style={[styles.logo]}
+            resizeMode="contain"
           />
           <StyledText 
             size="2xl" 
@@ -38,11 +40,7 @@ export default function Index() {
           >
             भारतीय रेल
           </StyledText>
-          <ActivityIndicator 
-            size="large" 
-            color={colors.white} 
-            style={styles.spinner} 
-          />
+          <LoadingTrain />
         </Animated.View>
       </StyledView>
     );
@@ -85,6 +83,11 @@ export default function Index() {
     );
   }
   
+  // Handle pending approval state
+  if (pendingApproval) {
+    return <Redirect href="/(auth)/pending-approval" />;
+  }
+  
   // Redirect based on authentication status
   return isAuthenticated ? <Redirect href="/(tabs)" /> : <Redirect href="/(auth)/login" />;
 }
@@ -116,9 +119,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
-  },
-  spinner: {
-    marginTop: 32,
   },
   errorTitle: {
     marginTop: 16,

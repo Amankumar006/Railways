@@ -39,6 +39,7 @@ export interface TripReport {
   train_number: string;
   train_name?: string;
   location: string;
+  line_number?: string;
   date: string;
   red_on_time?: string;
   red_off_time?: string;
@@ -49,4 +50,33 @@ export interface TripReport {
   rejected_at?: string | null;
   approved_by?: string | null;
   rejected_by?: string | null;
+  inspector?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  sections?: Array<{
+    id: string;
+    section_number: string;
+    name: string;
+    categories: Array<{
+      id: string;
+      category_number: string;
+      name: string;
+      activities: Array<{
+        id: string;
+        activity_number: string;
+        activity_text: string;
+        is_compulsory: boolean;
+        check_status: 'pending' | 'checked-okay' | 'checked-not-okay';
+        remarks?: string;
+      }>;
+    }>;
+  }>;
+  stats?: {
+    total_activities: number;
+    checked_okay: number;
+    checked_not_okay: number;
+    unchecked: number;
+  };
 }

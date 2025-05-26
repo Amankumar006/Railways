@@ -166,7 +166,9 @@ export function Button({
 
   // Handle the button press with console logging for debugging
   const handlePress = () => {
-    console.log('Button pressed:', title);
+    if (__DEV__) {
+      console.log('Button pressed:', title);
+    }
     if (onPress) {
       onPress();
     }
