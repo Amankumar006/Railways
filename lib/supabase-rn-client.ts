@@ -4,13 +4,34 @@ import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-// Get Supabase URL and Anon Key from environment variables
-const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl as string;
-const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey as string;
+// Get Supabase URL and Anon Key from multiple sources for reliability
+const getSupabaseConfig = () => {
+  // Try multiple ways to get the config
+  const urlFromConfig = Constants.expoConfig?.extra?.supabaseUrl;
+  const keyFromConfig = Constants.expoConfig?.extra?.supabaseAnonKey;
+  
+  // Direct environment access as fallback
+  const urlFromEnv = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const keyFromEnv = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  
+  // Try manifest as another fallback
+  const manifest = Constants.manifest || Constants.manifest2?.extra?.expoClient;
+  const urlFromManifest = manifest?.extra?.supabaseUrl;
+  const keyFromManifest = manifest?.extra?.supabaseAnonKey;
+  
+  const finalUrl = urlFromConfig || urlFromEnv || urlFromManifest || 'https://yjymlekomywnuwlzmsen.supabase.co';
+  const finalKey = keyFromConfig || keyFromEnv || keyFromManifest || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqeW1sZWtvbXl3bnV3bHptc2VuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NDgwMjgsImV4cCI6MjA2MzEyNDAyOH0.w4fF7BgwSmAeMqWMCBG5f4jOqIoHojEJ06csHmlRNMc';
+  
+  console.log('RN Client - Supabase config resolved:', {
+    url: finalUrl,
+    keyExists: !!finalKey,
+    source: urlFromConfig ? 'config' : urlFromEnv ? 'env' : urlFromManifest ? 'manifest' : 'hardcoded'
+  });
+  
+  return { url: finalUrl, key: finalKey };
+};
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
-}
+const { url: supabaseUrl, key: supabaseAnonKey } = getSupabaseConfig();
 
 // Create a platform-specific Supabase client
 export const createSupabaseClient = () => {
